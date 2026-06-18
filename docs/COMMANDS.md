@@ -1,4 +1,4 @@
-# CyberConsole - command reference
+# CET Mac - command reference
 
 Toggle the in-game console with **`` ` ``** (backtick/tilde) or **F1**. Type a command and press **Enter**.
 Use **↑/↓** for history and **Cmd+V/C/X/A** for clipboard. Type `help` in-game for a quick list.

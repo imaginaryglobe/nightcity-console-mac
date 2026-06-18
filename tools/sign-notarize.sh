@@ -1,5 +1,5 @@
 #!/bin/bash
-# Sign (Developer ID + hardened runtime), notarize, and package CyberConsole.app into a distributable .dmg.
+# Sign (Developer ID + hardened runtime), notarize, and package "CET Mac.app" into a distributable .dmg.
 # YOU run this with YOUR Apple Developer ID - it never asks the assistant for credentials.
 #
 # One-time setup (stores your notary credentials in the keychain):
@@ -12,9 +12,9 @@
 #   ./tools/sign-notarize.sh
 set -e
 cd "$(dirname "$0")/.."
-APP="build/CyberConsole.app"
-DMG="dist/CyberConsole.dmg"
-ZIP="dist/CyberConsole.zip"
+APP="build/CET Mac.app"
+DMG="dist/CET-Mac.dmg"
+ZIP="dist/CET-Mac.zip"
 
 : "${SIGN_IDENTITY:?set SIGN_IDENTITY to 'Developer ID Application: NAME (TEAMID)'}"
 : "${NOTARY_PROFILE:?set NOTARY_PROFILE to your notarytool keychain profile name}"
@@ -39,7 +39,7 @@ rm -f "$ZIP"
 
 echo "==> packaging stapled app into $DMG"
 rm -f "$DMG"
-hdiutil create -volname "CyberConsole" -srcfolder "$APP" -ov -format UDZO "$DMG"
+hdiutil create -volname "CET Mac" -srcfolder "$APP" -ov -format UDZO "$DMG"
 # notarize + staple the dmg too (so the downloaded .dmg itself passes Gatekeeper offline)
 xcrun notarytool submit "$DMG" --keychain-profile "$NOTARY_PROFILE" --wait
 xcrun stapler staple "$DMG"

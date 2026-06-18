@@ -1,6 +1,6 @@
 #!/bin/bash
 # Developer launch path: install the runtime payload into the game and launch with injection.
-# (Players use the CyberConsole.app launcher instead - this is the from-source dev workflow.)
+# (Players use the CET Mac.app launcher instead - this is the from-source dev workflow.)
 #
 # Steps: build overlay -> stage payload (runtime + deps + overlay) into <game>/red4ext/ -> launch.
 set -e

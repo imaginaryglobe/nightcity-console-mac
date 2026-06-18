@@ -3,13 +3,13 @@
 <plist version="1.0">
 <dict>
     <key>CFBundleName</key>
-    <string>CyberConsole</string>
+    <string>CET Mac</string>
     <key>CFBundleDisplayName</key>
-    <string>CyberConsole</string>
+    <string>CET Mac</string>
     <key>CFBundleIdentifier</key>
-    <string>dev.ysr.cyberconsole</string>
+    <string>dev.ysr.cetmac</string>
     <key>CFBundleExecutable</key>
-    <string>CyberConsole</string>
+    <string>CETMac</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleShortVersionString</key>

@@ -49,7 +49,7 @@ final class Model: ObservableObject {
             status = "Cyberpunk 2077 not found here - click Browse to locate it."
         } else {
             let v = gameVersion.map { " (v\($0))" } ?? ""
-            status = "Game found\(v)" + (installed ? " · CyberConsole installed" : " · not installed yet")
+            status = "Game found\(v)" + (installed ? " · CET Mac installed" : " · not installed yet")
         }
     }
 
@@ -145,7 +145,7 @@ struct ContentView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Text("CyberConsole").font(.largeTitle.bold())
+            Text("CET Mac").font(.largeTitle.bold())
             Text("In-game cheat console for Cyberpunk 2077 · macOS").foregroundColor(.secondary)
             Divider()
 
@@ -161,19 +161,19 @@ struct ContentView: View {
             }
 
             if versionMismatch, let v = m.gameVersion {
-                Label("Detected game v\(v); CyberConsole targets v\(Const.supportedGameVersion). It may not work.",
+                Label("Detected game v\(v); CET Mac targets v\(Const.supportedGameVersion). It may not work.",
                       systemImage: "exclamationmark.triangle.fill")
                     .font(.callout).foregroundColor(.orange)
             }
 
             HStack(spacing: 12) {
-                Button(m.installed ? "Reinstall" : "Install") { m.install() }
+                Button(m.installed ? "Reinstall CET Mac" : "Install") { m.install() }
                     .disabled(!m.gameFound)
                 Button("Play  ▶") { m.play() }
                     .disabled(!m.installed)
                     .keyboardShortcut(.defaultAction)
                 Spacer()
-                Button("Uninstall") { m.uninstall() }
+                Button("Uninstall CET Mac") { m.uninstall() }
                     .disabled(!m.installed)
             }
 
@@ -188,7 +188,7 @@ struct ContentView: View {
             Text("Single-player only · back up your saves").font(.caption2).foregroundColor(.secondary)
         }
         .padding(22)
-        .frame(width: 540, height: 380)
+        .frame(width: 600, height: 380)
     }
 
     func browse() {
@@ -205,7 +205,7 @@ struct ContentView: View {
 @main
 struct CyberConsoleApp: App {
     var body: some Scene {
-        WindowGroup("CyberConsole") {
+        WindowGroup("CET Mac") {
             ContentView()
         }
     }

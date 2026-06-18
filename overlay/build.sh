@@ -1,5 +1,5 @@
 #!/bin/bash
-# Build the CyberConsole in-game overlay dylib (arm64). Clones Dear ImGui on first run.
+# Build the CET Mac in-game overlay dylib (arm64). Clones Dear ImGui on first run.
 # Output: build/libcyberconsole_overlay.dylib (ad-hoc signed for dev; release signing is in tools/).
 set -e
 cd "$(dirname "$0")"

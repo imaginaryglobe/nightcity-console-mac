@@ -1,4 +1,4 @@
-# CyberConsole
+# CET Mac
 
 An in-game cheat/mod console for Cyberpunk 2077 on macOS (Apple Silicon). It does the kind of thing
 Cyber Engine Tweaks does on Windows, on a platform where CET doesn't exist. You press a key in-game,
@@ -12,8 +12,8 @@ Platform: macOS arm64. Built against Cyberpunk 2077 v2.3.1 (Steam).
 
 ## For players
 
-1. Download `CyberConsole.dmg` from [Releases](../../releases).
-2. Open it and run CyberConsole (drag it to Applications if you like).
+1. Download `CET-Mac.dmg` from [Releases](../../releases).
+2. Open it and run CET Mac (drag it to Applications if you like).
 3. Click Install, then Play.
 4. In-game, press the backtick/tilde key (`` ` ``) or F1 to open the console. Type `help`.
 
@@ -44,7 +44,7 @@ See [docs/COMMANDS.md](docs/COMMANDS.md) for the full list and known limits.
 
 ## How it works (short version)
 
-CyberConsole injects into the arm64 game process with `DYLD_INSERT_LIBRARIES` (no SIP changes; the game
+CET Mac injects into the arm64 game process with `DYLD_INSERT_LIBRARIES` (no SIP changes; the game
 ships entitlements that allow it), resolves REDengine's RTTI, and drives the script VM to call game
 functions with typed arguments. The console UI is Dear ImGui drawn from a `presentDrawable:` hook; input
 comes from an `NSApplication.sendEvent:` hook. Commands travel over a small file channel to the injected
