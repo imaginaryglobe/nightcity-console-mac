@@ -75,6 +75,13 @@ binaries are not committed (see `.gitignore`); they're fetched into `deps/` and 
 - Single-player only. Do not use online or with anti-cheat. Modding can corrupt saves, so keep backups.
 - macOS arm64 only.
 
+## Support
+
+This is free and open source. If it saved you some hassle and you want to support development, you
+can buy me a coffee. Completely optional, and very appreciated.
+
+[![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/ysrdevs)
+
 ## Credits and license
 
 MIT (see [LICENSE](LICENSE)). Built on [Dear ImGui](https://github.com/ocornut/imgui), Frida, and the

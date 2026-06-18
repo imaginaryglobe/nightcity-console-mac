@@ -9,6 +9,7 @@ enum Const {
     static let payload = ["red4ext_hooks.js", "FridaGadget.config", "RED4ext.dylib",
                           "FridaGadget.dylib", "libcyberconsole_overlay.dylib"]
     static let commandsURL = "https://github.com/ysrdevs/cet-mac/blob/main/docs/COMMANDS.md"
+    static let supportURL = "https://ko-fi.com/ysrdevs"
 }
 
 final class Model: ObservableObject {
@@ -182,6 +183,7 @@ struct ContentView: View {
                     .fixedSize(horizontal: false, vertical: true)
                 Spacer()
                 Link("Commands", destination: URL(string: Const.commandsURL)!)
+                Link("♥ Support", destination: URL(string: Const.supportURL)!)
             }
             Text("Single-player only · back up your saves").font(.caption2).foregroundColor(.secondary)
         }
