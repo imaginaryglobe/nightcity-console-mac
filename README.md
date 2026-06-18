@@ -77,7 +77,7 @@ it produces both a `.dmg` and a `.zip` in `dist/`.
   differs, so it is not supported yet. **GOG support is in progress.**
 - Built against Cyberpunk 2077 v2.3.1 (macOS, Apple Silicon, Steam). Game updates can move offsets and
   break it. Releases are tagged per supported game version.
-- Single-player only. Do not use online or with anti-cheat. Modding can corrupt saves, so keep backups.
+- Single-player only. Modding can corrupt saves, so keep backups.
 - macOS arm64 only.
 
 ## Support
