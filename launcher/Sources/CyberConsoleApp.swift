@@ -143,6 +143,9 @@ struct ContentView: View {
         return m.gameFound && v != Const.supportedGameVersion
     }
 
+    // Steam installs always live under a "steamapps" path; anything else (e.g. GOG) is not supported yet.
+    var nonSteam: Bool { m.gameFound && !m.gamePath.contains("steamapps") }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             Text("CET Mac").font(.largeTitle.bold())
@@ -162,6 +165,11 @@ struct ContentView: View {
 
             if versionMismatch, let v = m.gameVersion {
                 Label("Detected game v\(v); CET Mac targets v\(Const.supportedGameVersion). It may not work.",
+                      systemImage: "exclamationmark.triangle.fill")
+                    .font(.callout).foregroundColor(.orange)
+            }
+            if nonSteam {
+                Label("Only the Steam version is supported right now. GOG support is in progress.",
                       systemImage: "exclamationmark.triangle.fill")
                     .font(.callout).foregroundColor(.orange)
             }
@@ -185,6 +193,7 @@ struct ContentView: View {
                 Link("Commands", destination: URL(string: Const.commandsURL)!)
                 Link("♥ Support", destination: URL(string: Const.supportURL)!)
             }
+            Text("Steam version only for now · GOG support in progress").font(.caption2).foregroundColor(.secondary)
             Text("Single-player only · back up your saves").font(.caption2).foregroundColor(.secondary)
         }
         .padding(22)

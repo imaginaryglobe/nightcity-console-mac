@@ -8,7 +8,7 @@ and more. CET item codes from the internet paste in and work as-is.
 Single-player, personal use, on your own legally-owned copy. Not affiliated with CD PROJEKT RED.
 Back up your saves before using it.
 
-Platform: macOS arm64. Built against Cyberpunk 2077 v2.3.1 (Steam).
+Platform: macOS arm64. Built against Cyberpunk 2077 v2.3.1 (Steam). GOG support is in progress.
 
 ![CET Mac launcher](assets/screenshot.png)
 
@@ -72,6 +72,8 @@ binaries are not committed (see `.gitignore`); they're fetched into `deps/` and 
 
 ## Compatibility and caveats
 
+- **Steam version only** right now. The offsets are derived from the Steam macOS build; the GOG build
+  differs, so it is not supported yet. **GOG support is in progress.**
 - Built against Cyberpunk 2077 v2.3.1 (macOS, Apple Silicon, Steam). Game updates can move offsets and
   break it. Releases are tagged per supported game version.
 - Single-player only. Do not use online or with anti-cheat. Modding can corrupt saves, so keep backups.
