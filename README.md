@@ -10,6 +10,8 @@ Back up your saves before using it.
 
 Platform: macOS arm64. Built against Cyberpunk 2077 v2.3.1 (Steam).
 
+![CET Mac launcher](assets/screenshot.png)
+
 ## For players
 
 1. Download `CET-Mac.dmg` from [Releases](../../releases).
