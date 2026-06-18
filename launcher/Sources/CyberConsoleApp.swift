@@ -8,7 +8,8 @@ enum Const {
     // Files copied from the app's Resources into <game>/red4ext/ on install.
     static let payload = ["red4ext_hooks.js", "FridaGadget.config", "RED4ext.dylib",
                           "FridaGadget.dylib", "libcyberconsole_overlay.dylib"]
-    static let commandsURL = "https://github.com/ysrdevs/cet-mac/blob/main/docs/COMMANDS.md"
+    static let repo = "ysrdevs/CET-mac"
+    static let commandsURL = "https://github.com/ysrdevs/CET-mac/blob/main/docs/COMMANDS.md"
     static let supportURL = "https://ko-fi.com/ysrdevs"
 }
 
@@ -17,12 +18,15 @@ final class Model: ObservableObject {
     @Published var status: String = ""
     @Published var installed: Bool = false
     @Published var gameVersion: String? = nil
+    @Published var updateText: String? = nil      // set when a newer release is found on GitHub
+    @Published var updateURL: String? = nil
 
     private let defaults = UserDefaults.standard
 
     init() {
         gamePath = defaults.string(forKey: "gamePath") ?? Const.defaultGame
         refresh()
+        checkForUpdates()
     }
 
     var binaryPath: String { "\(gamePath)/Cyberpunk2077.app/Contents/MacOS/Cyberpunk2077" }
@@ -51,6 +55,43 @@ final class Model: ObservableObject {
             let v = gameVersion.map { " (v\($0))" } ?? ""
             status = "Game found\(v)" + (installed ? " · CET Mac installed" : " · not installed yet")
         }
+    }
+
+    // Best-effort GitHub Releases check. Silent on any failure (offline, rate limit, parse error).
+    func checkForUpdates() {
+        guard let url = URL(string: "https://api.github.com/repos/\(Const.repo)/releases/latest") else { return }
+        var req = URLRequest(url: url, timeoutInterval: 8)
+        req.setValue("cet-mac-update-check", forHTTPHeaderField: "User-Agent")
+        req.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
+        URLSession.shared.dataTask(with: req) { data, _, _ in
+            guard let data = data,
+                  let obj = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
+                  let tag = obj["tag_name"] as? String,
+                  Model.isNewer(tag, than: Const.appVersion) else { return }
+            var dl = (obj["html_url"] as? String) ?? "https://github.com/\(Const.repo)/releases/latest"
+            if let assets = obj["assets"] as? [[String: Any]] {
+                for a in assets where (a["name"] as? String)?.lowercased().hasSuffix(".dmg") == true {
+                    if let u = a["browser_download_url"] as? String { dl = u; break }
+                }
+            }
+            DispatchQueue.main.async {
+                self.updateText = "Update available: \(tag). Download the new version and replace the app."
+                self.updateURL = dl
+            }
+        }.resume()
+    }
+
+    // Compare dotted version tags (leading v/V tolerated). Returns true if `tag` > `current`.
+    static func isNewer(_ tag: String, than current: String) -> Bool {
+        func parts(_ s: String) -> [Int] {
+            s.trimmingCharacters(in: CharacterSet(charactersIn: "vV ")).split(separator: ".").map { Int($0) ?? 0 }
+        }
+        let a = parts(tag), b = parts(current)
+        for i in 0..<max(a.count, b.count) {
+            let x = i < a.count ? a[i] : 0, y = i < b.count ? b[i] : 0
+            if x != y { return x > y }
+        }
+        return false
     }
 
     func readGameVersion() -> String? {
@@ -151,6 +192,14 @@ struct ContentView: View {
             Text("CET Mac").font(.largeTitle.bold())
             Text("In-game cheat console for Cyberpunk 2077 · macOS").foregroundColor(.secondary)
             Divider()
+
+            if let ut = m.updateText {
+                HStack {
+                    Label(ut, systemImage: "arrow.down.circle.fill").font(.callout).foregroundColor(.green)
+                    Spacer()
+                    if let u = m.updateURL, let url = URL(string: u) { Link("Download", destination: url) }
+                }
+            }
 
             VStack(alignment: .leading, spacing: 4) {
                 Text("GAME FOLDER").font(.caption2).foregroundColor(.secondary)
