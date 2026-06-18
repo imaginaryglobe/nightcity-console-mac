@@ -1,5 +1,5 @@
 #!/bin/bash
-# Sign (Developer ID + hardened runtime), notarize, and package "CET Mac.app" into a distributable .dmg.
+# Sign (Developer ID + hardened runtime), notarize, and package "CET Mac.app" into a .dmg and a .zip.
 # YOU run this with YOUR Apple Developer ID - it never asks the assistant for credentials.
 #
 # One-time setup (stores your notary credentials in the keychain):
@@ -14,7 +14,8 @@ set -e
 cd "$(dirname "$0")/.."
 APP="build/CET Mac.app"
 DMG="dist/CET-Mac.dmg"
-ZIP="dist/CET-Mac.zip"
+ZIP="dist/CET-Mac.zip"          # distributable zip (made from the stapled app)
+SUBZIP="dist/_notarize.zip"     # temporary zip used only for the notarization upload
 
 : "${SIGN_IDENTITY:?set SIGN_IDENTITY to 'Developer ID Application: NAME (TEAMID)'}"
 : "${NOTARY_PROFILE:?set NOTARY_PROFILE to your notarytool keychain profile name}"
@@ -31,17 +32,22 @@ codesign --verify --deep --strict --verbose=2 "$APP"
 
 echo "==> notarizing the app"
 mkdir -p dist
+rm -f "$SUBZIP"
+/usr/bin/ditto -c -k --keepParent "$APP" "$SUBZIP"
+xcrun notarytool submit "$SUBZIP" --keychain-profile "$NOTARY_PROFILE" --wait
+xcrun stapler staple "$APP"          # staple the ticket onto the app on disk
+rm -f "$SUBZIP"
+
+echo "==> packaging the stapled app (.zip + .dmg)"
+# 1) distributable .zip: the app inside is stapled, so it passes Gatekeeper offline
 rm -f "$ZIP"
 /usr/bin/ditto -c -k --keepParent "$APP" "$ZIP"
-xcrun notarytool submit "$ZIP" --keychain-profile "$NOTARY_PROFILE" --wait
-xcrun stapler staple "$APP"          # staple the ticket onto the app
-rm -f "$ZIP"
-
-echo "==> packaging stapled app into $DMG"
+# 2) .dmg, then notarize + staple the dmg itself so the downloaded image also passes offline
 rm -f "$DMG"
 hdiutil create -volname "CET Mac" -srcfolder "$APP" -ov -format UDZO "$DMG"
-# notarize + staple the dmg too (so the downloaded .dmg itself passes Gatekeeper offline)
 xcrun notarytool submit "$DMG" --keychain-profile "$NOTARY_PROFILE" --wait
 xcrun stapler staple "$DMG"
 
-echo "done: $DMG  (signed, notarized, stapled - ships with no Gatekeeper warnings)"
+echo "done (signed, notarized, stapled - no Gatekeeper warnings):"
+echo "  $DMG"
+echo "  $ZIP"

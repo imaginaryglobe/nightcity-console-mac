@@ -68,7 +68,8 @@ git clone <this repo> && cd cet-mac
 
 `dev/launch.sh` honors `CP2077_DIR` if your game isn't at the default Steam path. The third-party runtime
 binaries are not committed (see `.gitignore`); they're fetched into `deps/` and bundled into the release
-`.dmg`. Building the signed, notarized app: see `tools/sign-notarize.sh` (needs an Apple Developer ID).
+`.dmg`. Building the signed, notarized app: see `tools/sign-notarize.sh` (needs an Apple Developer ID);
+it produces both a `.dmg` and a `.zip` in `dist/`.
 
 ## Compatibility and caveats
 
