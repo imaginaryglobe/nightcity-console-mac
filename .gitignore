@@ -1,0 +1,26 @@
+# Build outputs & bundled artifacts (never committed - shipped only in the .dmg release)
+build/
+deps/
+dist/
+*.dylib
+*.dmg
+*.app/
+DerivedData/
+
+# Dear ImGui is cloned at build time (see overlay/build.sh)
+overlay/imgui/
+
+# Swift / Xcode
+.build/
+*.xcuserstate
+xcuserdata/
+
+# macOS
+.DS_Store
+
+# Private reverse-engineering & test data - keep out of the public repo
+_refs/
+_ghidra/
+saves/
+fixtures/
+*.log
