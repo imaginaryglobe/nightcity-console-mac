@@ -916,7 +916,7 @@ rpc.exports = {
             log('unknown: '+line); }
         setInterval(function(){ try{ const c=readFile(CMD); const s=(c||'').trim();
             if(!s){ lastCmd=''; return; }                 // file empty -> re-arm so an identical next command fires again
-            if(s!==lastCmd){ lastCmd=s; pendingQ.push(s); clearFile(CMD); log('queued: '+s); } }catch(e){} }, 500);
+            if(s!==lastCmd){ lastCmd=s; const cmd=s.replace(/^\d+\t/,''); pendingQ.push(cmd); clearFile(CMD); log('queued: '+cmd); } }catch(e){} }, 120);
         // Clean shutdown: the game's static-destructor teardown segfaults with hooks attached (cosmetic,
         // happens AFTER the game has saved + quit). Route exit() -> _exit() to skip that teardown so the
         // process exits cleanly (no macOS crash dialog, exit code 0).

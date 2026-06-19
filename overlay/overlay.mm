@@ -64,8 +64,11 @@ static void refreshOut() {
     fclose(f);
     if (g_lines.size() > 400) g_lines.erase(g_lines.begin(), g_lines.end() - 400);
 }
+static unsigned g_cmdSeq = 0;
 static void submitCommand(const char* c) {
-    FILE* f = fopen(CMD_PATH, "w"); if (f) { fprintf(f, "%s\n", c); fclose(f); }
+    // Prefix a monotonic sequence so repeated identical commands are never de-duped
+    // by the Frida poller (it compares raw file contents). The JS strips the "<seq>\t".
+    FILE* f = fopen(CMD_PATH, "w"); if (f) { fprintf(f, "%u\t%s\n", ++g_cmdSeq, c); fclose(f); }
     olog("submitted: %s", c);
 }
 static void appendOut(const char* s) { FILE* f = fopen(OUT_PATH, "a"); if (f) { fprintf(f, "%s\n", s); fclose(f); } }
