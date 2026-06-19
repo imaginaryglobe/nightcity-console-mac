@@ -42,6 +42,7 @@ static std::atomic<bool> g_focusInput{false};
 static std::atomic<int>  g_activeTab{0};        // 0 Console, 1 Items, 2 Quick
 static std::atomic<bool> g_tabReq{false};       // a keyboard tab-switch was requested
 static std::atomic<bool> g_itemsTabEntered{false};
+static std::atomic<bool> g_pinTopReq{false};    // Cmd+P pins the current top search result
 static std::vector<std::string> g_lines;
 static char g_input[512] = {0};
 static std::vector<std::string> g_history;   // submitted commands (oldest first)
@@ -278,6 +279,46 @@ static void runCommand(const std::string& cmd) {
     refreshOut();
 }
 
+// last-action confirmation shown in the overlay footer
+static std::string g_lastAction;
+static void runLabeled(const std::string& cmd, const std::string& label) { g_lastAction = label; runCommand(cmd); }
+
+// persistent pinned-favorite items (~/Library/Application Support/CETMac/favorites.txt)
+struct Fav { std::string id, name; };
+static std::vector<Fav> g_favorites;
+static bool g_favLoaded = false;
+
+static std::string favPath() {
+    NSString* dir = [NSHomeDirectory() stringByAppendingPathComponent:@"Library/Application Support/CETMac"];
+    [[NSFileManager defaultManager] createDirectoryAtPath:dir withIntermediateDirectories:YES attributes:nil error:nil];
+    return std::string([[dir stringByAppendingPathComponent:@"favorites.txt"] UTF8String]);
+}
+static void loadFavorites() {
+    g_favLoaded = true;
+    FILE* f = fopen(favPath().c_str(), "r"); if (!f) return;
+    char line[1024];
+    while (fgets(line, sizeof(line), f)) {
+        size_t n = strlen(line); while (n && (line[n-1] == '\n' || line[n-1] == '\r')) line[--n] = 0;
+        if (!line[0]) continue;
+        char* tab = strchr(line, '\t');
+        if (tab) { *tab = 0; g_favorites.push_back({line, tab + 1}); }
+        else g_favorites.push_back({line, line});
+    }
+    fclose(f);
+}
+static void saveFavorites() {
+    FILE* f = fopen(favPath().c_str(), "w"); if (!f) return;
+    for (auto& fv : g_favorites) fprintf(f, "%s\t%s\n", fv.id.c_str(), fv.name.c_str());
+    fclose(f);
+}
+static void addFavorite(const std::string& id, const std::string& name) {
+    for (auto& fv : g_favorites) if (fv.id == id) { g_lastAction = "Already pinned: " + name; return; }
+    g_favorites.push_back({id, name}); saveFavorites(); g_lastAction = "Pinned: " + name;
+}
+static void removeFavorite(int i) {
+    if (i >= 0 && i < (int)g_favorites.size()) { g_favorites.erase(g_favorites.begin() + i); saveFavorites(); }
+}
+
 static void drawItemsTab() {
     if (!g_catalogLoaded) loadCatalog();
     if (g_catalog.empty()) { ImGui::TextDisabled("Item catalog not found (cet_catalog.tsv)."); return; }
@@ -291,11 +332,15 @@ static void drawItemsTab() {
     if (g_lastFilter != g_itemFilter) rebuildFilter();
     if (entered && !g_filtered.empty()) {
         const CatItem& top = g_catalog[g_filtered[0]];
-        runCommand("give " + top.id + " " + std::to_string(g_giveQty));
+        runLabeled("give " + top.id + " " + std::to_string(g_giveQty), "Added " + top.name);
         ImGui::SetKeyboardFocusHere(-1);   // keep typing in the search box
     }
+    if (g_pinTopReq.exchange(false) && !g_filtered.empty()) {   // Cmd+P pins the top result
+        const CatItem& top = g_catalog[g_filtered[0]];
+        addFavorite(top.id, top.name);
+    }
     if (!g_filtered.empty())
-        ImGui::TextDisabled("Enter spawns: %s   (%d matches)", g_catalog[g_filtered[0]].name.c_str(), (int)g_filtered.size());
+        ImGui::TextDisabled("Enter spawns / Cmd+P pins: %s   (%d matches)", g_catalog[g_filtered[0]].name.c_str(), (int)g_filtered.size());
     else
         ImGui::TextDisabled("no matches");
     ImGui::Separator();
@@ -305,7 +350,9 @@ static void drawItemsTab() {
         for (int row = clipper.DisplayStart; row < clipper.DisplayEnd; ++row) {
             const CatItem& it = g_catalog[g_filtered[row]];
             ImGui::PushID(row);
-            if (ImGui::SmallButton("Give")) runCommand("give " + it.id + " " + std::to_string(g_giveQty));
+            if (ImGui::SmallButton("Give")) runLabeled("give " + it.id + " " + std::to_string(g_giveQty), "Added " + it.name);
+            ImGui::SameLine();
+            if (ImGui::SmallButton("Pin")) addFavorite(it.id, it.name);
             ImGui::SameLine();
             if (row == 0) ImGui::TextColored(ImVec4(1.0f, 0.95f, 0.4f, 1.0f), "%s", it.name.c_str());  // top result (Enter target)
             else ImGui::TextUnformatted(it.name.c_str());
@@ -317,21 +364,34 @@ static void drawItemsTab() {
 }
 
 static void drawQuickTab() {
+    if (!g_favLoaded) loadFavorites();
+    ImGui::TextDisabled("Pinned items:");
+    if (g_favorites.empty())
+        ImGui::TextDisabled("  (none yet - go to the Items tab, find an item, click Pin)");
+    for (int i = 0; i < (int)g_favorites.size(); ++i) {
+        ImGui::PushID(2000 + i);
+        if (ImGui::SmallButton("Give")) runLabeled("give " + g_favorites[i].id + " 1", "Added " + g_favorites[i].name);
+        ImGui::SameLine();
+        if (ImGui::SmallButton("x")) { removeFavorite(i); ImGui::PopID(); break; }
+        ImGui::SameLine(); ImGui::TextUnformatted(g_favorites[i].name.c_str());
+        ImGui::PopID();
+    }
+    ImGui::Separator();
     ImGui::TextDisabled("One-click cheats:");
-    if (ImGui::Button("Money +50k")) runCommand("money 50000"); ImGui::SameLine();
-    if (ImGui::Button("Heal")) runCommand("heal"); ImGui::SameLine();
-    if (ImGui::Button("Godmode")) runCommand("godmode"); ImGui::SameLine();
-    if (ImGui::Button("Godmode off")) runCommand("godmode off");
-    if (ImGui::Button("Perks +10")) runCommand("perks 10"); ImGui::SameLine();
-    if (ImGui::Button("Attrs +10")) runCommand("attrs 10"); ImGui::SameLine();
-    if (ImGui::Button("Relic +10")) runCommand("relic 10"); ImGui::SameLine();
-    if (ImGui::Button("Level 50")) runCommand("level 50");
+    if (ImGui::Button("Money +50k")) runLabeled("money 50000", "Money +50k"); ImGui::SameLine();
+    if (ImGui::Button("Heal")) runLabeled("heal", "Healed"); ImGui::SameLine();
+    if (ImGui::Button("Godmode")) runLabeled("godmode", "Godmode on"); ImGui::SameLine();
+    if (ImGui::Button("Godmode off")) runLabeled("godmode off", "Godmode off");
+    if (ImGui::Button("Perks +10")) runLabeled("perks 10", "Perks +10"); ImGui::SameLine();
+    if (ImGui::Button("Attrs +10")) runLabeled("attrs 10", "Attrs +10"); ImGui::SameLine();
+    if (ImGui::Button("Relic +10")) runLabeled("relic 10", "Relic +10"); ImGui::SameLine();
+    if (ImGui::Button("Level 50")) runLabeled("level 50", "Level 50");
     ImGui::Separator();
     ImGui::TextDisabled("Teleport bookmark (save a spot, return later):");
     static char tpname[64] = "home";
     ImGui::SetNextItemWidth(160); ImGui::InputText("##tpname", tpname, sizeof(tpname));
-    ImGui::SameLine(); if (ImGui::Button("Save spot")) runCommand(std::string("teleport save ") + tpname);
-    ImGui::SameLine(); if (ImGui::Button("Go to spot")) runCommand(std::string("teleport ") + tpname);
+    ImGui::SameLine(); if (ImGui::Button("Save spot")) runLabeled(std::string("teleport save ") + tpname, std::string("Saved spot: ") + tpname);
+    ImGui::SameLine(); if (ImGui::Button("Go to spot")) runLabeled(std::string("teleport ") + tpname, std::string("Teleported: ") + tpname);
 }
 
 static void drawConsole() {
@@ -365,6 +425,10 @@ static void drawConsole() {
         if (ImGui::BeginTabItem("Items", nullptr, req == 1 ? ImGuiTabItemFlags_SetSelected : 0)) { drawItemsTab(); ImGui::EndTabItem(); }
         if (ImGui::BeginTabItem("Quick", nullptr, req == 2 ? ImGuiTabItemFlags_SetSelected : 0)) { drawQuickTab(); ImGui::EndTabItem(); }
         ImGui::EndTabBar();
+    }
+    if (!g_lastAction.empty()) {
+        ImGui::Separator();
+        ImGui::TextColored(ImVec4(0.45f, 1.0f, 0.55f, 1.0f), "%s", g_lastAction.c_str());
     }
     ImGui::End();
 }
@@ -427,6 +491,7 @@ static void my_sendEvent(id self, SEL _cmd, NSEvent* ev) {
                     if (tab == 1) g_itemsTabEntered = true;
                     return;  // swallow
                 }
+                if (kc == 35) { g_pinTopReq = true; return; }   // Cmd+P pins the current top search result
             }
         }
         if (g_show.load()) {
