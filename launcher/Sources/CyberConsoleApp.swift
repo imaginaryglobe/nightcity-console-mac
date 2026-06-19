@@ -7,7 +7,7 @@ enum Const {
     static let defaultGame = "\(NSHomeDirectory())/Library/Application Support/Steam/steamapps/common/Cyberpunk 2077"
     // Files copied from the app's Resources into <game>/red4ext/ on install.
     static let payload = ["red4ext_hooks.js", "FridaGadget.config", "RED4ext.dylib",
-                          "FridaGadget.dylib", "libcyberconsole_overlay.dylib"]
+                          "FridaGadget.dylib", "libcyberconsole_overlay.dylib", "cet_catalog.tsv"]
     static let repo = "ysrdevs/CET-mac"
     static let commandsURL = "https://github.com/ysrdevs/CET-mac/blob/main/docs/COMMANDS.md"
     static let supportURL = "https://ko-fi.com/ysrdevs"

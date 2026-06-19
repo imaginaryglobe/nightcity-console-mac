@@ -21,7 +21,7 @@ swiftc -O -parse-as-library -target arm64-apple-macos12 \
   launcher/Sources/*.swift
 
 echo "==> bundling payload into Resources"
-cp runtime/red4ext_hooks.js runtime/FridaGadget.config "$APP/Contents/Resources/"
+cp runtime/red4ext_hooks.js runtime/FridaGadget.config runtime/cet_catalog.tsv "$APP/Contents/Resources/"
 cp deps/RED4ext.dylib deps/FridaGadget.dylib            "$APP/Contents/Resources/"
 cp build/libcyberconsole_overlay.dylib                  "$APP/Contents/Resources/"
 

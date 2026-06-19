@@ -24,6 +24,7 @@ cp "$ROOT/runtime/FridaGadget.config" "$RED4/FridaGadget.config"
 cp "$ROOT/deps/RED4ext.dylib"         "$RED4/RED4ext.dylib"
 cp "$ROOT/deps/FridaGadget.dylib"     "$RED4/FridaGadget.dylib"
 OVERLAY="$ROOT/build/libcyberconsole_overlay.dylib"
+cp "$ROOT/runtime/cet_catalog.tsv" "$ROOT/build/cet_catalog.tsv"   # the overlay reads the catalog from its own dir
 # strip quarantine from anything we just wrote so dyld will load it
 xattr -dr com.apple.quarantine "$RED4" "$OVERLAY" 2>/dev/null || true
 

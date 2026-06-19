@@ -20,6 +20,8 @@
 #include <mutex>
 #include <atomic>
 #include <dispatch/dispatch.h>
+#include <dlfcn.h>
+#include <cctype>
 #include "imgui.h"
 #include "backends/imgui_impl_metal.h"
 
@@ -210,26 +212,141 @@ static int inputCallback(ImGuiInputTextCallbackData* data) {
     return 0;
 }
 
-static void drawConsole() {
-    ImGui::SetNextWindowSize(ImVec2(820, 460), ImGuiCond_FirstUseEver);
-    ImGui::SetNextWindowPos(ImVec2(48, 48), ImGuiCond_FirstUseEver);
-    ImGui::Begin("CP2077 mini-CET  ( ` or F1 to toggle )");
-    ImGui::BeginChild("scroll", ImVec2(0, -ImGui::GetFrameHeightWithSpacing()), false, ImGuiWindowFlags_HorizontalScrollbar);
-    for (auto& l : g_lines) ImGui::TextUnformatted(l.c_str());
-    if (ImGui::GetScrollY() >= ImGui::GetScrollMaxY() - 4.0f) ImGui::SetScrollHereY(1.0f);
-    ImGui::EndChild();
-    ImGui::Separator();
-    ImGui::SetNextItemWidth(-1.0f);
-    if (g_focusInput.exchange(false)) ImGui::SetKeyboardFocusHere();
-    ImGuiInputTextFlags flags = ImGuiInputTextFlags_EnterReturnsTrue | ImGuiInputTextFlags_CallbackHistory;
-    if (ImGui::InputText("##cmd", g_input, sizeof(g_input), flags, inputCallback)) {
-        if (g_input[0]) {
-            if (g_history.empty() || g_history.back() != g_input) g_history.push_back(g_input);
-            g_historyPos = -1;
-            handleSubmit(g_input);
-            g_input[0] = 0;
+// ---- item catalog (searchable browser) ----
+struct CatItem { std::string id, name, type, sheet; };
+static std::vector<CatItem> g_catalog;
+static bool g_catalogLoaded = false;
+static char g_itemFilter[128] = {0};
+static std::string g_lastFilter = "\x01";   // force first build
+static std::vector<int> g_filtered;
+static int g_giveQty = 1;
+
+// the catalog ships next to the overlay dylib (red4ext/ when installed, build/ in dev)
+static std::string overlayDir() {
+    Dl_info info;
+    if (dladdr((void*)&overlayDir, &info) && info.dli_fname) {
+        std::string p = info.dli_fname;
+        size_t s = p.find_last_of('/');
+        if (s != std::string::npos) return p.substr(0, s);
+    }
+    return ".";
+}
+
+static void loadCatalog() {
+    g_catalogLoaded = true;
+    std::string path = overlayDir() + "/cet_catalog.tsv";
+    FILE* f = fopen(path.c_str(), "r");
+    if (!f) { olog("catalog not found: %s", path.c_str()); return; }
+    char line[1024];
+    while (fgets(line, sizeof(line), f)) {
+        size_t n = strlen(line);
+        while (n && (line[n-1] == '\n' || line[n-1] == '\r')) line[--n] = 0;
+        std::string fields[4]; int fi = 0; std::string cur;
+        for (char* p = line; ; ++p) {
+            if (*p == '\t' || *p == 0) { if (fi < 4) fields[fi] = cur; fi++; cur.clear(); if (*p == 0) break; }
+            else cur += *p;
         }
-        ImGui::SetKeyboardFocusHere(-1);
+        if (fields[0].empty()) continue;
+        g_catalog.push_back({fields[0], fields[1], fields[2], fields[3]});
+    }
+    fclose(f);
+    olog("catalog loaded: %zu items", g_catalog.size());
+}
+
+static std::string lower(const std::string& s) { std::string r = s; for (auto& c : r) c = (char)tolower((unsigned char)c); return r; }
+
+static void rebuildFilter() {
+    g_filtered.clear();
+    std::string q = lower(g_itemFilter);
+    for (int i = 0; i < (int)g_catalog.size(); ++i) {
+        const CatItem& it = g_catalog[i];
+        if (q.empty() || lower(it.name).find(q) != std::string::npos
+                       || lower(it.id).find(q) != std::string::npos
+                       || lower(it.type).find(q) != std::string::npos)
+            g_filtered.push_back(i);
+    }
+    g_lastFilter = g_itemFilter;
+}
+
+// send a command to the game, echoing it into the console scrollback
+static void runCommand(const std::string& cmd) {
+    appendOut((std::string("> ") + cmd).c_str());
+    submitCommand(cmd.c_str());
+    refreshOut();
+}
+
+static void drawItemsTab() {
+    if (!g_catalogLoaded) loadCatalog();
+    if (g_catalog.empty()) { ImGui::TextDisabled("Item catalog not found (cet_catalog.tsv)."); return; }
+    ImGui::SetNextItemWidth(110);
+    if (ImGui::InputInt("qty", &g_giveQty)) { if (g_giveQty < 1) g_giveQty = 1; }
+    ImGui::SameLine();
+    ImGui::SetNextItemWidth(-1);
+    ImGui::InputTextWithHint("##itemsearch", "search items by name or id...", g_itemFilter, sizeof(g_itemFilter));
+    if (g_lastFilter != g_itemFilter) rebuildFilter();
+    ImGui::TextDisabled("%d / %zu items  (click Give to spawn)", (int)g_filtered.size(), g_catalog.size());
+    ImGui::Separator();
+    ImGui::BeginChild("itemlist", ImVec2(0, 0));
+    ImGuiListClipper clipper; clipper.Begin((int)g_filtered.size());
+    while (clipper.Step()) {
+        for (int row = clipper.DisplayStart; row < clipper.DisplayEnd; ++row) {
+            const CatItem& it = g_catalog[g_filtered[row]];
+            ImGui::PushID(row);
+            if (ImGui::SmallButton("Give")) runCommand("give " + it.id + " " + std::to_string(g_giveQty));
+            ImGui::SameLine(); ImGui::TextUnformatted(it.name.c_str());
+            ImGui::SameLine(); ImGui::TextDisabled("  %s", it.id.c_str());
+            ImGui::PopID();
+        }
+    }
+    ImGui::EndChild();
+}
+
+static void drawQuickTab() {
+    ImGui::TextDisabled("One-click cheats:");
+    if (ImGui::Button("Money +50k")) runCommand("money 50000"); ImGui::SameLine();
+    if (ImGui::Button("Heal")) runCommand("heal"); ImGui::SameLine();
+    if (ImGui::Button("Godmode")) runCommand("godmode"); ImGui::SameLine();
+    if (ImGui::Button("Godmode off")) runCommand("godmode off");
+    if (ImGui::Button("Perks +10")) runCommand("perks 10"); ImGui::SameLine();
+    if (ImGui::Button("Attrs +10")) runCommand("attrs 10"); ImGui::SameLine();
+    if (ImGui::Button("Relic +10")) runCommand("relic 10"); ImGui::SameLine();
+    if (ImGui::Button("Level 50")) runCommand("level 50");
+    ImGui::Separator();
+    ImGui::TextDisabled("Teleport bookmark (save a spot, return later):");
+    static char tpname[64] = "home";
+    ImGui::SetNextItemWidth(160); ImGui::InputText("##tpname", tpname, sizeof(tpname));
+    ImGui::SameLine(); if (ImGui::Button("Save spot")) runCommand(std::string("teleport save ") + tpname);
+    ImGui::SameLine(); if (ImGui::Button("Go to spot")) runCommand(std::string("teleport ") + tpname);
+}
+
+static void drawConsole() {
+    ImGui::SetNextWindowSize(ImVec2(860, 480), ImGuiCond_FirstUseEver);
+    ImGui::SetNextWindowPos(ImVec2(48, 48), ImGuiCond_FirstUseEver);
+    ImGui::Begin("CET Mac  ( ` or F1 to toggle )");
+    if (ImGui::BeginTabBar("cetmac_tabs")) {
+        if (ImGui::BeginTabItem("Console")) {
+            ImGui::BeginChild("scroll", ImVec2(0, -ImGui::GetFrameHeightWithSpacing()), false, ImGuiWindowFlags_HorizontalScrollbar);
+            for (auto& l : g_lines) ImGui::TextUnformatted(l.c_str());
+            if (ImGui::GetScrollY() >= ImGui::GetScrollMaxY() - 4.0f) ImGui::SetScrollHereY(1.0f);
+            ImGui::EndChild();
+            ImGui::Separator();
+            ImGui::SetNextItemWidth(-1.0f);
+            if (g_focusInput.exchange(false)) ImGui::SetKeyboardFocusHere();
+            ImGuiInputTextFlags flags = ImGuiInputTextFlags_EnterReturnsTrue | ImGuiInputTextFlags_CallbackHistory;
+            if (ImGui::InputText("##cmd", g_input, sizeof(g_input), flags, inputCallback)) {
+                if (g_input[0]) {
+                    if (g_history.empty() || g_history.back() != g_input) g_history.push_back(g_input);
+                    g_historyPos = -1;
+                    handleSubmit(g_input);
+                    g_input[0] = 0;
+                }
+                ImGui::SetKeyboardFocusHere(-1);
+            }
+            ImGui::EndTabItem();
+        }
+        if (ImGui::BeginTabItem("Items")) { drawItemsTab(); ImGui::EndTabItem(); }
+        if (ImGui::BeginTabItem("Quick")) { drawQuickTab(); ImGui::EndTabItem(); }
+        ImGui::EndTabBar();
     }
     ImGui::End();
 }
