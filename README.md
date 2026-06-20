@@ -28,12 +28,12 @@ Platform: macOS arm64. Built against Cyberpunk 2077 v2.3.1 (Steam). GOG support 
 
 <table>
   <tr>
-    <td width="50%"><img src="assets/search-item.png" width="100%" alt="Search any item and add it"><br><b>Search any item and spawn it</b></td>
-    <td width="50%"><img src="assets/item-stats.png" width="100%" alt="Find any item and its stats"><br><b>Find any item and its stats</b></td>
+    <td width="50%"><img src="assets/search-item.jpg" width="100%" alt="Search any item and add it"><br><b>Search any item and spawn it</b></td>
+    <td width="50%"><img src="assets/item-stats.jpg" width="100%" alt="Find any item and its stats"><br><b>Find any item and its stats</b></td>
   </tr>
   <tr>
-    <td width="50%"><img src="assets/add-points.png" width="100%" alt="Add perks, attributes, and relic points"><br><b>Add perks, attributes, and relic points</b></td>
-    <td width="50%"><img src="assets/teleport-quick-actions.png" width="100%" alt="Teleport utility and quick actions"><br><b>Teleport utility and quick actions</b></td>
+    <td width="50%"><img src="assets/add-points.jpg" width="100%" alt="Add perks, attributes, and relic points"><br><b>Add perks, attributes, and relic points</b></td>
+    <td width="50%"><img src="assets/teleport-quick-actions.jpg" width="100%" alt="Teleport utility and quick actions"><br><b>Teleport utility and quick actions</b></td>
   </tr>
 </table>
 
