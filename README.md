@@ -64,8 +64,9 @@ The game captures the mouse during play, so the overlay is keyboard-driven. Swit
 Cmd+2 / Cmd+3**:
 
 - **Console** (Cmd+1) - type commands directly. Up/Down for history, Cmd+V to paste, `help` for the list.
-- **Items** (Cmd+2) - type to search 7,552 items, press **Enter** to spawn the top match, **Cmd+P** to pin
-  it to your favorites. Set the quantity first if you want a stack.
+- **Items** (Cmd+2) - browse by category (Weapons, Cyberware, Clothes, Crafting, Mods, Misc; **Cmd+G**
+  cycles) or type to search 7,552 items. **Enter** spawns the top match, **Cmd+P** pins it to favorites.
+  Set the quantity first if you want a stack.
 - **Quick** (Cmd+3) - one-click cheats (money, heal, godmode, invisibility, perks/attributes/relic,
   level), your pinned favorites, and teleport bookmarks.
 
@@ -87,9 +88,9 @@ Game.AddToInventory("Items.MaxDOSE", 5)    # CET-style line, also works
 
 - **In-game ImGui console** drawn on the live frame (Metal), keyboard-driven with tabs (Cmd+1/2/3),
   command history, and clipboard (Cmd+V).
-- **Searchable item browser** - a bundled catalog of 7,552 items. Type to filter, Enter to spawn the top
-  match, no hunting for ids. Add/remove any item by `Items.*` id, any quantity, including CET
-  `Game.AddToInventory` syntax.
+- **Searchable item browser** - a bundled catalog of 7,552 items. Browse by category or type to filter,
+  Enter to spawn the top match, no hunting for ids. Add/remove any item by `Items.*` id, any quantity,
+  including CET `Game.AddToInventory` syntax.
 - **Pinned favorites** - pin items (Cmd+P) and they persist across restarts in a Quick tab, so your go-to
   gear is one keypress away.
 - **One-click cheats** - money, full heal, perks, attributes, relic points, set character level.

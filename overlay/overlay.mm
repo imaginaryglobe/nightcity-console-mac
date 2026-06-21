@@ -229,6 +229,16 @@ static std::string g_lastFilter = "\x01";   // force first build
 static std::vector<int> g_filtered;
 static int g_giveQty = 1;
 
+// item-browser category filter (by the catalog "sheet" column). index 0 = All.
+struct Cat { const char* label; const char* sheet; };
+static const Cat g_categories[] = {
+    {"All", ""}, {"Weapons", "WEAPONS"}, {"Cyberware", "CYBERWARE"},
+    {"Clothes", "CLOTHES"}, {"Crafting", "CRAFTING"}, {"Mods", "MODS"}, {"Misc", "MISC"}
+};
+static const int g_numCategories = 7;
+static std::atomic<int>  g_catFilter{0};
+static std::atomic<bool> g_catReq{false};
+
 // the catalog ships next to the overlay dylib (red4ext/ when installed, build/ in dev)
 static std::string overlayDir() {
     Dl_info info;
@@ -266,8 +276,11 @@ static std::string lower(const std::string& s) { std::string r = s; for (auto& c
 static void rebuildFilter() {
     g_filtered.clear();
     std::string q = lower(g_itemFilter);
+    int cat = g_catFilter.load();
+    const char* sheet = (cat > 0 && cat < g_numCategories) ? g_categories[cat].sheet : nullptr;
     for (int i = 0; i < (int)g_catalog.size(); ++i) {
         const CatItem& it = g_catalog[i];
+        if (sheet && it.sheet != sheet) continue;   // category filter
         if (q.empty() || lower(it.name).find(q) != std::string::npos
                        || lower(it.id).find(q) != std::string::npos
                        || lower(it.type).find(q) != std::string::npos)
@@ -326,14 +339,23 @@ static void removeFavorite(int i) {
 static void drawItemsTab() {
     if (!g_catalogLoaded) loadCatalog();
     if (g_catalog.empty()) { ImGui::TextDisabled("Item catalog not found (cet_catalog.tsv)."); return; }
+    // category row: click a category to browse it (or Cmd+G to cycle by keyboard)
+    int cat = g_catFilter.load();
+    for (int c = 0; c < g_numCategories; ++c) {
+        if (c) ImGui::SameLine();
+        bool active = (c == cat);
+        if (active) ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.20f, 0.45f, 0.75f, 1.0f));
+        if (ImGui::SmallButton(g_categories[c].label)) { g_catFilter = c; g_catReq = true; }
+        if (active) ImGui::PopStyleColor();
+    }
     ImGui::SetNextItemWidth(110);
     if (ImGui::InputInt("qty", &g_giveQty)) { if (g_giveQty < 1) g_giveQty = 1; }
     ImGui::SameLine();
     if (g_itemsTabEntered.exchange(false)) ImGui::SetKeyboardFocusHere();   // focus the search box on tab enter
     ImGui::SetNextItemWidth(-1);
-    bool entered = ImGui::InputTextWithHint("##itemsearch", "type to search, Enter spawns the top result",
+    bool entered = ImGui::InputTextWithHint("##itemsearch", "type to search, Enter spawns the top result (Cmd+G cycles category)",
                                             g_itemFilter, sizeof(g_itemFilter), ImGuiInputTextFlags_EnterReturnsTrue);
-    if (g_lastFilter != g_itemFilter) rebuildFilter();
+    if (g_catReq.exchange(false) || g_lastFilter != g_itemFilter) rebuildFilter();
     if (entered && !g_filtered.empty()) {
         const CatItem& top = g_catalog[g_filtered[0]];
         runLabeled("give " + top.id + " " + std::to_string(g_giveQty), "Added " + top.name);
@@ -508,6 +530,7 @@ static void my_sendEvent(id self, SEL _cmd, NSEvent* ev) {
                     return;  // swallow
                 }
                 if (kc == 35) { g_pinTopReq = true; return; }   // Cmd+P pins the current top search result
+                if (kc == 5)  { g_catFilter = (g_catFilter.load() + 1) % g_numCategories; g_catReq = true; return; }  // Cmd+G cycles item category
             }
         }
         if (g_show.load()) {
