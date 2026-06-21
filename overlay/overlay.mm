@@ -482,6 +482,11 @@ static void renderOverlay(id<MTLCommandBuffer> cb, id<CAMetalDrawable> drawable)
         olog("present FIRED: cb=%s drawable=%p tex=%p", cb ? class_getName(object_getClass(cb)) : "null",
              (__bridge void*)drawable, (__bridge void*)(drawable ? drawable.texture : nil));   // one-time diagnostic
     if (!cb || !drawable) return;
+    // When the console is hidden there is nothing to draw. Skip the entire render pass:
+    // encoding an empty ImGui frame plus a Load-action render command encoder every frame
+    // costs real GPU time (a full-framebuffer memory round-trip) and stutters in dense,
+    // GPU-bound interiors. Bail before we touch the GPU so a closed console is free.
+    if (!g_show.load()) return;
     id<MTLTexture> tex = drawable.texture; if (!tex) return;
     id<MTLDevice> dev = cb.device;
     if (!g_imguiInit) initImGui(dev);
@@ -523,17 +528,26 @@ static IMP origPresentFor(id self, SEL _cmd) {
 }
 // The game may present via presentDrawable:, presentDrawable:atTime:, or presentDrawable:afterMinimumDuration:
 // (newer hardware/displays use the frame-paced variants). Render in all three, then chain to the original.
+// A present can be nested (e.g. the MTL3On4 compat wrapper forwards to the underlying AGX buffer's present,
+// and we hook both); render ONLY at the outermost call so we don't draw the overlay twice per frame.
+static thread_local int g_presentDepth = 0;
 static void my_presentDrawable(id self, SEL _cmd, id drawable) {
-    runRender(self, drawable);
+    if (g_presentDepth == 0) runRender(self, drawable);
+    g_presentDepth++;
     IMP o = origPresentFor(self, _cmd); if (o) ((void(*)(id, SEL, id))o)(self, _cmd, drawable);
+    g_presentDepth--;
 }
 static void my_presentAtTime(id self, SEL _cmd, id drawable, CFTimeInterval t) {
-    runRender(self, drawable);
+    if (g_presentDepth == 0) runRender(self, drawable);
+    g_presentDepth++;
     IMP o = origPresentFor(self, _cmd); if (o) ((void(*)(id, SEL, id, CFTimeInterval))o)(self, _cmd, drawable, t);
+    g_presentDepth--;
 }
 static void my_presentAfter(id self, SEL _cmd, id drawable, CFTimeInterval d) {
-    runRender(self, drawable);
+    if (g_presentDepth == 0) runRender(self, drawable);
+    g_presentDepth++;
     IMP o = origPresentFor(self, _cmd); if (o) ((void(*)(id, SEL, id, CFTimeInterval))o)(self, _cmd, drawable, d);
+    g_presentDepth--;
 }
 
 static void my_sendEvent(id self, SEL _cmd, NSEvent* ev) {
