@@ -25,6 +25,10 @@ Item IDs are the same `Items.*` TweakDB names CET uses, so codes you find online
 | `heal` | Refill health to full. |
 | `godmode [off]` | Toggle invulnerability - no damage at all, including fall damage. |
 | `invis [off]` | Toggle invisibility - cameras and enemies can't see you. |
+| `infammo [off]` | Toggle infinite ammo. |
+| `time <h> [m]` | Set the in-game time of day (24h). |
+| `slowmo [factor\|off]` | Slow motion (default 0.3x; e.g. `slowmo 0.1`). |
+| `nopolice [off]` | Disable / re-enable the police response. |
 
 ## World
 | Command | Effect |

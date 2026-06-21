@@ -751,6 +751,7 @@ rpc.exports = {
             }
         }
         function doGodmode(on){ toggleStatus('godmode', 'BaseStatusEffect.Invulnerable', on); }
+        function doInfammo(on){ toggleStatus('infinite ammo', 'GameplayRestriction.InfiniteAmmo', on); }
         function doInvisible(on){
             toggleStatus('invisible', 'BaseStatusEffect.Cloaked', on);
             // Cloaked is only the visual camo; SetInvisible() is what actually breaks enemy detection.
@@ -758,6 +759,32 @@ rpc.exports = {
                 const si=resolveAny(['gameObject','gameEntity'],'SetInvisible'); if(si) callFunc(si.fn, p, si.retType, [on?'true':'false']);
                 const uv=resolveAny(['gameObject','gameEntity'],'UpdateVisibility'); if(uv) callFunc(uv.fn, p, uv.retType, []);
             }catch(e){ log('invis visibility err: '+e); }
+        }
+        // --- world / misc cheats ---
+        function doTime(h,m){
+            const gi=getGI(); if(!gi){ log('time: no gi'); return; }
+            const ts=getViaGetter(gi,'GetTimeSystem'); if(!ts){ log('time: TimeSystem not reachable'); return; }
+            const e=resolveAny(['gameTimeSystem'],'SetGameTimeByHMS'); if(!e){ log('time: SetGameTimeByHMS not found'); return; }
+            try{ callFunc(e.fn, ts, e.retType, [''+h, ''+m, '0']); log('*** time set to '+h+':'+(m<10?'0':'')+m+' ***'); }
+            catch(ex){ log('time err: '+ex); }
+        }
+        function doSlowmo(on, factor){
+            const gi=getGI(); if(!gi){ log('slowmo: no gi'); return; }
+            const ts=getViaGetter(gi,'GetTimeSystem'); if(!ts){ log('slowmo: TimeSystem not reachable'); return; }
+            if(on){ const e=resolveAny(['gameTimeSystem'],'SetTimeDilation'); if(!e){ log('slowmo: SetTimeDilation not found'); return; }
+                try{ callFunc(e.fn, ts, e.retType, ['NightCityConsole', ''+(factor||0.3)]); log('*** slowmo ON ('+(factor||0.3)+'x) ***'); }catch(ex){ log('slowmo err: '+ex); } }
+            else { const e=resolveAny(['gameTimeSystem'],'UnsetTimeDilation'); if(!e){ log('slowmo: UnsetTimeDilation not found'); return; }
+                try{ callFunc(e.fn, ts, e.retType, ['NightCityConsole']); log('*** slowmo OFF ***'); }catch(ex){ log('slowmo err: '+ex); } }
+        }
+        function doNoPolice(on){
+            const gi=getGI(); if(!gi){ log('nopolice: no gi'); return; }
+            const p=authPlayer(gi); if(!p){ log('nopolice: no player'); return; }
+            const gp=resolveAny(['gameObject','PlayerPuppet','gameEntity'],'GetPreventionSystem'); if(!gp){ log('nopolice: GetPreventionSystem not found'); return; }
+            let ps=null; try{ ps=callFunc(gp.fn, p, gp.retType, []).readPointer(); }catch(ex){ log('nopolice: GetPreventionSystem err: '+ex); return; }
+            if(!sane(ps)){ log('nopolice: no PreventionSystem instance'); return; }
+            const e=resolveAny(['PreventionSystem','gamePreventionSystem'],'TogglePreventionSystem'); if(!e){ log('nopolice: TogglePreventionSystem not found'); return; }
+            try{ callFunc(e.fn, ps, e.retType, [on?'false':'true']); log('*** police '+(on?'DISABLED':'enabled')+' ***'); }
+            catch(ex){ log('nopolice err: '+ex); }
         }
         function doLevel(n){
             const dd=getDevData(); if(!dd){ log('level: no PlayerDevelopmentData'); return; }
@@ -932,6 +959,10 @@ rpc.exports = {
             if(t[0]==='relic'&&t[1]){ addPoints(Math.max(1,parseInt(t[1])||1),'Espionage'); return; }
             if(t[0]==='godmode'){ doGodmode(t[1]!=='off'); return; }
             if(t[0]==='invis'||t[0]==='invisible'){ doInvisible(t[1]!=='off'); return; }
+            if(t[0]==='infammo'||t[0]==='ammo'){ doInfammo(t[1]!=='off'); return; }
+            if(t[0]==='time'&&t[1]){ doTime(Math.max(0,Math.min(23,parseInt(t[1])||0)), Math.max(0,Math.min(59,parseInt(t[2]||'0')||0))); return; }
+            if(t[0]==='slowmo'){ if(t[1]==='off') doSlowmo(false); else doSlowmo(true, parseFloat(t[1])||0.3); return; }
+            if(t[0]==='nopolice'||t[0]==='police'){ doNoPolice(t[1]!=='off'); return; }
             if((t[0]==='removeitem'||t[0]==='remove')&&t[1]){ doRemove(t[1], Math.max(1,parseInt(t[2]||'1')||1)); return; }
             if(t[0]==='heal'){ doHeal(); return; }
             if((t[0]==='setfact'||t[0]==='addfact')&&t[1]){ doSetFact(t[1], parseInt(t[2]||'1')||1); return; }

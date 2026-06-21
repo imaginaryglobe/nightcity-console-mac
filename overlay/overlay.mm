@@ -80,8 +80,9 @@ static void handleSubmit(const char* cmd) {
     if (strcmp(cmd, "help") == 0) {
         appendOut("items:  give <Items.X> <qty> | removeitem <Items.X> <qty> | money <n>");
         appendOut("        CET style: Game.AddToInventory(\"Items.X\", n)");
-        appendOut("char:   perks <n> | attrs <n> | relic <n> | level <n> | heal | godmode [off] | invis [off]");
-        appendOut("world:  teleport save <name> | teleport <name> | teleport <x> <y> <z> | setfact <name> <n>");
+        appendOut("char:   perks <n> | attrs <n> | relic <n> | level <n> | heal | godmode [off] | invis [off] | infammo [off]");
+        appendOut("world:  time <h> [m] | slowmo [factor|off] | nopolice [off]");
+        appendOut("        teleport save <name> | teleport <name> | teleport <x> <y> <z> | setfact <name> <n>");
         appendOut("misc:   call <Class> <method> [args] | sig <Class> <method> | convdump | clear | help");
         appendOut("tip: Up/Down = command history. Bookmark spots: 'teleport save home' then 'teleport home'");
     } else {
@@ -386,11 +387,21 @@ static void drawQuickTab() {
     if (ImGui::Button("Godmode")) runLabeled("godmode", "Godmode on"); ImGui::SameLine();
     if (ImGui::Button("Godmode off")) runLabeled("godmode off", "Godmode off");
     if (ImGui::Button("Invisible")) runLabeled("invis", "Invisible on"); ImGui::SameLine();
-    if (ImGui::Button("Invisible off")) runLabeled("invis off", "Invisible off");
+    if (ImGui::Button("Invisible off")) runLabeled("invis off", "Invisible off"); ImGui::SameLine();
+    if (ImGui::Button("Infinite ammo")) runLabeled("infammo", "Infinite ammo on"); ImGui::SameLine();
+    if (ImGui::Button("Ammo off")) runLabeled("infammo off", "Infinite ammo off");
     if (ImGui::Button("Perks +10")) runLabeled("perks 10", "Perks +10"); ImGui::SameLine();
     if (ImGui::Button("Attrs +10")) runLabeled("attrs 10", "Attrs +10"); ImGui::SameLine();
     if (ImGui::Button("Relic +10")) runLabeled("relic 10", "Relic +10"); ImGui::SameLine();
     if (ImGui::Button("Level 50")) runLabeled("level 50", "Level 50");
+    ImGui::Separator();
+    ImGui::TextDisabled("World:");
+    if (ImGui::Button("Day")) runLabeled("time 12", "Time: noon"); ImGui::SameLine();
+    if (ImGui::Button("Night")) runLabeled("time 0", "Time: midnight");
+    if (ImGui::Button("Slow-mo")) runLabeled("slowmo", "Slow-mo on"); ImGui::SameLine();
+    if (ImGui::Button("Slow-mo off")) runLabeled("slowmo off", "Slow-mo off"); ImGui::SameLine();
+    if (ImGui::Button("No police")) runLabeled("nopolice", "Police disabled"); ImGui::SameLine();
+    if (ImGui::Button("Police on")) runLabeled("nopolice off", "Police enabled");
     ImGui::Separator();
     ImGui::TextDisabled("Teleport bookmark (save a spot, return later):");
     static char tpname[64] = "home";

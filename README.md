@@ -96,6 +96,8 @@ Game.AddToInventory("Items.MaxDOSE", 5)    # CET-style line, also works
 - **Godmode** - true no-damage invulnerability, including fall damage. Auto-reapplies so it survives
   scene and vehicle transitions.
 - **Invisibility** - cameras and enemies can't see you (line-of-sight and detection break).
+- **Infinite ammo** - fire without consuming ammo.
+- **World toggles** - set time of day, slow motion, and disable the police response.
 - **Teleport** with saved position bookmarks (save a spot, return to it later).
 - **Action confirmations** - every command reports what it just did.
 - Quest facts, and a generic `call <Class> <Method>` bridge that can invoke any observed RTTI method.
