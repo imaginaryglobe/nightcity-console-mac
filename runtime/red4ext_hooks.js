@@ -625,8 +625,10 @@ rpc.exports = {
             const give=function(q){ const id=Memory.alloc(16); id.writeU64(0); id.add(8).writeU64(0); fromTDBID(tdbidBytes(name),id);
                 return callFuncRaw(e.fn, tx, e.retType, [{kind:'handle',inst:owner},{kind:'item16',ptr:id},{kind:'i32',v:q}]); };
             let ok=0;
-            if(forceBulk||qty>20){ ok=give(qty).readU8(); log('give '+name+' x'+qty+' (bulk) -> '+ok); }
-            else { for(let k=0;k<qty;k++){ if(give(1).readU8()) ok++; } log('give '+name+' x'+qty+' -> '+ok+'/'+qty); }
+            // GiveItem's quantity arg is only honored for currency (money). For normal items it adds 1
+            // regardless, so loop give(1) N times to actually deposit the requested count. Cap to avoid hangs.
+            if(forceBulk){ ok=give(qty).readU8(); log('give '+name+' x'+qty+' (bulk) -> '+ok); }
+            else { const n=Math.min(qty,9999); for(let k=0;k<n;k++){ if(give(1).readU8()) ok++; } log('give '+name+' x'+n+' -> '+ok+'/'+n); }
             if(!ok) log('  (0 added - bad item id? names start with "Items." e.g. Items.Preset_Lexington_Default)'); }
         // raw marshaller (pre-encoded values) for give chaining
         function callFuncRaw(fn, ctx, retType, items){ const pEntries=fn.add(0x28).readPointer();
@@ -718,25 +720,11 @@ rpc.exports = {
             }
             log('  no local-player getter resolved on the player system'); return null;
         }
-        function doGodmode(on){
-            const gi=getGI(); if(!gi){ log('godmode: no GameInstance'); return; }
-            const sys=getViaGetter(gi,'GetGodModeSystem'); if(!sys){ log('godmode: GetGodModeSystem not reachable'); return; }
-            getDevData();   // side effect: also locks devOwner to the verified local player
-            const p=authPlayer(gi); if(!p){ log('godmode: no player'); return; }
-            const geid=resolveAny(['gameObject','gameEntity'],'GetEntityID'); if(!geid){ log('godmode: GetEntityID not found'); return; }
-            const eid=callFunc(geid.fn, p, geid.retType, []); log('  player='+p+' entityID='+hexp(eid,8));
-            const has=resolveAny(['gameGodModeSystem'],'HasGodMode');
-            const fnName=on?'AddGodMode':'RemoveGodMode';
-            const e=resolveAny(['gameGodModeSystem'],fnName); if(!e){ log('godmode: '+fnName+' not found'); return; }
-            // (entEntityID, gameGodModeType, CName reason). Invulnerable = take NO damage (true godmode);
-            // Immortal only prevents death (you still take damage down to 1 HP).
-            for(const mem of ['Invulnerable','Immortal','Default']){
-                try{ callFunc(e.fn, sys, e.retType, [{raw:eid,n:8}, mem, 'Console']);
-                    let v='?'; if(has){ try{ v=callFunc(has.fn, sys, has.retType, [{raw:eid,n:8}, mem]).readU8(); }catch(_){} }
-                    log('*** godmode '+(on?'ON':'OFF')+' ('+mem+') HasGodMode='+v+' ***'); return; }
-                catch(ex){ log('  '+fnName+'('+mem+') err: '+ex); }
-            }
-            log('godmode: no enum member worked');
+        // godmode is disabled for now. It registers with the game's god-mode system, but on build 2.3.1 the
+        // entity id we can resolve isn't honored by the combat/damage pipeline (you still take damage and die).
+        // Left as a clear notice until the entity-id resolution is fixed; the UI button is disabled too.
+        function doGodmode(on, forced){
+            log('*** godmode is not working yet on this build and is disabled - tracked for a future update ***');
         }
         function doLevel(n){
             const dd=getDevData(); if(!dd){ log('level: no PlayerDevelopmentData'); return; }
@@ -793,10 +781,11 @@ rpc.exports = {
             const geid=resolveAny(['gameObject','gameEntity'],'GetEntityID'); if(!geid){ log('heal: GetEntityID not found'); return; }
             const eid=callFunc(geid.fn,p,geid.retType,[]);
             const rs=resolveAny(['gameStatPoolsSystem'],'RequestSettingStatPoolValue'); if(!rs){ log('heal: RequestSettingStatPoolValue not found'); return; }
-            log('  RequestSettingStatPoolValue '+sigStr(rs.fn));
-            // (gameStatsObjectID, gamedataStatPoolType 'Health', Float 100, source(null), Bool, Bool)
+            // (gameStatsObjectID, gamedataStatPoolType 'Health', Float value, source(null), Bool, Bool)
+            // The pool value is ABSOLUTE points (~1816 at high levels), not a 0-100 percentage, so 100
+            // under-heals badly. Set a value far above any max; the pool clamps it to the real max (full).
             const src=Memory.alloc(16);   // zeroed null source
-            try{ callFunc(rs.fn, sps, rs.retType, [{raw:eid,n:8},'Health','100',{raw:src,n:16},'false','false']); log('*** heal: Health set to 100 ***'); }
+            try{ callFunc(rs.fn, sps, rs.retType, [{raw:eid,n:8},'Health','1000000',{raw:src,n:16},'false','false']); log('*** heal: Health set to full ***'); }
             catch(e){ log('heal err: '+e); }
         }
         function doSummon(){
@@ -894,7 +883,7 @@ rpc.exports = {
             if(t[0]==='perks'&&t[1]){ addPoints(Math.max(1,parseInt(t[1])||1),'Primary'); return; }
             if(t[0]==='attrs'&&t[1]){ addPoints(Math.max(1,parseInt(t[1])||1),'Attribute'); return; }
             if(t[0]==='relic'&&t[1]){ addPoints(Math.max(1,parseInt(t[1])||1),'Espionage'); return; }
-            if(t[0]==='godmode'){ doGodmode(t[1]!=='off'); return; }
+            if(t[0]==='godmode'){ doGodmode(); return; }
             if((t[0]==='removeitem'||t[0]==='remove')&&t[1]){ doRemove(t[1], Math.max(1,parseInt(t[2]||'1')||1)); return; }
             if(t[0]==='heal'){ doHeal(); return; }
             if((t[0]==='setfact'||t[0]==='addfact')&&t[1]){ doSetFact(t[1], parseInt(t[2]||'1')||1); return; }

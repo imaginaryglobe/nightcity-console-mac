@@ -1,10 +1,10 @@
 #!/bin/bash
-# Build "CET Mac.app" (ad-hoc signed, for dev/testing).
+# Build "NightCity Console.app" (ad-hoc signed, for dev/testing).
 # Bundles the runtime payload into Contents/Resources so the app can install it into the game.
 # Release signing + notarization + .dmg is a separate step: tools/sign-notarize.sh
 set -e
 cd "$(dirname "$0")/.."   # repo root
-APP="build/CET Mac.app"
+APP="build/NightCity Console.app"
 
 echo "==> overlay + deps"
 ./overlay/build.sh
@@ -17,7 +17,7 @@ cp launcher/Info.plist "$APP/Contents/Info.plist"
 
 echo "==> compiling launcher"
 swiftc -O -parse-as-library -target arm64-apple-macos12 \
-  -o "$APP/Contents/MacOS/CETMac" \
+  -o "$APP/Contents/MacOS/NightCityConsole" \
   launcher/Sources/*.swift
 
 echo "==> bundling payload into Resources"

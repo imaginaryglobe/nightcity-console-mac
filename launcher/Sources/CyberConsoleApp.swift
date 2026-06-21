@@ -2,14 +2,14 @@ import SwiftUI
 import AppKit
 
 enum Const {
-    static let appVersion = "1.1.1"
+    static let appVersion = "1.2.0"
     static let supportedGameVersion = "2.3.1"
     static let defaultGame = "\(NSHomeDirectory())/Library/Application Support/Steam/steamapps/common/Cyberpunk 2077"
     // Files copied from the app's Resources into <game>/red4ext/ on install.
     static let payload = ["red4ext_hooks.js", "FridaGadget.config", "RED4ext.dylib",
                           "FridaGadget.dylib", "libcyberconsole_overlay.dylib", "cet_catalog.tsv"]
-    static let repo = "ysrdevs/CET-mac"
-    static let commandsURL = "https://github.com/ysrdevs/CET-mac/blob/main/docs/COMMANDS.md"
+    static let repo = "ysrdevs/nightcity-console-mac"
+    static let commandsURL = "https://github.com/ysrdevs/nightcity-console-mac/blob/main/docs/COMMANDS.md"
     static let supportURL = "https://ko-fi.com/ysrdevs"
 }
 
@@ -53,7 +53,7 @@ final class Model: ObservableObject {
             status = "Cyberpunk 2077 not found here - click Browse to locate it."
         } else {
             let v = gameVersion.map { " (v\($0))" } ?? ""
-            status = "Game found\(v)" + (installed ? " · CET Mac installed" : " · not installed yet")
+            status = "Game found\(v)" + (installed ? " · NightCity Console installed" : " · not installed yet")
         }
     }
 
@@ -61,7 +61,7 @@ final class Model: ObservableObject {
     func checkForUpdates() {
         guard let url = URL(string: "https://api.github.com/repos/\(Const.repo)/releases/latest") else { return }
         var req = URLRequest(url: url, timeoutInterval: 8)
-        req.setValue("cet-mac-update-check", forHTTPHeaderField: "User-Agent")
+        req.setValue("nightcity-console-update-check", forHTTPHeaderField: "User-Agent")
         req.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
         URLSession.shared.dataTask(with: req) { data, _, _ in
             guard let data = data,
@@ -141,7 +141,7 @@ final class Model: ObservableObject {
         <key>com.apple.security.cs.disable-library-validation</key><true/>
         </dict></plist>
         """
-        let plistPath = NSTemporaryDirectory() + "cetmac-entitlements.plist"
+        let plistPath = NSTemporaryDirectory() + "nightcity-entitlements.plist"
         do { try ents.write(toFile: plistPath, atomically: true, encoding: .utf8) }
         catch { status = "Could not prepare entitlements: \(error.localizedDescription)"; return false }
         let p = Process()
@@ -238,7 +238,7 @@ struct ContentView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Text("CET Mac").font(.largeTitle.bold())
+            Text("NightCity Console").font(.largeTitle.bold())
             Text("In-game cheat console for Cyberpunk 2077 · macOS").foregroundColor(.secondary)
             Divider()
 
@@ -262,7 +262,7 @@ struct ContentView: View {
             }
 
             if versionMismatch, let v = m.gameVersion {
-                Label("Detected game v\(v); CET Mac targets v\(Const.supportedGameVersion). It may not work.",
+                Label("Detected game v\(v); NightCity Console targets v\(Const.supportedGameVersion). It may not work.",
                       systemImage: "exclamationmark.triangle.fill")
                     .font(.callout).foregroundColor(.orange)
             }
@@ -273,13 +273,13 @@ struct ContentView: View {
             }
 
             HStack(spacing: 12) {
-                Button(m.installed ? "Reinstall CET Mac" : "Install") { m.install() }
+                Button(m.installed ? "Reinstall NightCity Console" : "Install") { m.install() }
                     .disabled(!m.gameFound)
                 Button("Play  ▶") { m.play() }
                     .disabled(!m.installed)
                     .keyboardShortcut(.defaultAction)
                 Spacer()
-                Button("Uninstall CET Mac") { m.uninstall() }
+                Button("Uninstall NightCity Console") { m.uninstall() }
                     .disabled(!m.installed)
             }
 
@@ -312,7 +312,7 @@ struct ContentView: View {
 @main
 struct CyberConsoleApp: App {
     var body: some Scene {
-        WindowGroup("CET Mac") {
+        WindowGroup("NightCity Console") {
             ContentView()
         }
     }

@@ -1,4 +1,4 @@
-# CET Mac - command reference
+# NightCity Console - command reference
 
 Toggle the in-game console with **`` ` ``** (backtick/tilde) or **F1**. Type a command and press **Enter**.
 Use **↑/↓** for history and **Cmd+V/C/X/A** for clipboard. Type `help` in-game for a quick list.
@@ -23,7 +23,7 @@ Item IDs are the same `Items.*` TweakDB names CET uses, so codes you find online
 | `relic <N>` | Add N relic points. |
 | `level <N>` | Set character level. |
 | `heal` | Refill health to full. |
-| `godmode [off]` | Register godmode (see note). |
+| `godmode [off]` | Not working yet (see note). |
 
 ## World
 | Command | Effect |
@@ -43,8 +43,9 @@ Item IDs are the same `Items.*` TweakDB names CET uses, so codes you find online
 | `clear` / `help` | Clear scrollback / list commands. |
 
 ## Notes & known limits
-- **godmode**: registers via the game's godmode system, but on game build 2.3.1 the damage pipeline still
-  applies hit damage (it prevents death, not damage). True zero-damage would need a per-tick health refill.
+- **godmode**: not working yet, disabled in the UI. It registers with the game's god-mode system, but on
+  build 2.3.1 the entity id we can resolve isn't honored by the combat/damage pipeline (you still take
+  damage and can die). Being worked on; tracked for a future update.
 - **teleport** is blocked by the game during active combat; bookmarks are session-only.
 - **Quest-gated items** (e.g. `Items.mq007_skippy`) won't commit without the relevant quest active.
 - **Deferred / contributions welcome**: real vehicle summon, equip-to-slot, NPC/vehicle spawn.

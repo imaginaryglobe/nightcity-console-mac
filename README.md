@@ -1,28 +1,32 @@
-# CET Mac
+# NightCity Console for Mac
 
 ![macOS arm64](https://img.shields.io/badge/macOS-arm64-black)
 ![Cyberpunk 2077](https://img.shields.io/badge/Cyberpunk%202077-2.3.1-yellow)
 ![License](https://img.shields.io/badge/license-MIT-blue)
 ![Status](https://img.shields.io/badge/status-Steam%20supported-green)
 
-A native Apple Silicon in-game console for Cyberpunk 2077 on macOS.
+A native Apple Silicon in-game console and item browser for Cyberpunk 2077 on macOS.
 
-Think Cyber Engine Tweaks, but rebuilt for native macOS/Apple Silicon. CET Mac brings CET-style commands
+Think Cyber Engine Tweaks, but rebuilt for native macOS/Apple Silicon. NightCity Console brings CET-style commands
 to the native macOS version of Cyberpunk 2077, with an in-game Metal overlay you drive from the keyboard:
 search and spawn from a built-in browser of 7,552 items, pin your favorites, fire one-click cheats
-(money, heal, godmode, perks/attributes/relic, level), teleport with bookmarks, run CET-style commands,
+(money, heal, perks/attributes/relic, level), teleport with bookmarks, run CET-style commands,
 and debug REDengine calls.
+
+> Renamed from CET Mac to NightCity Console for Mac to avoid confusion with Cyber Engine Tweaks. This is an
+> independent macOS-native project and is not affiliated with CET, WolvenKit, REDmod, CD PROJEKT RED, or
+> Cyberpunk 2077.
 
 Single-player, personal use, on your own legally-owned copy. Not affiliated with Cyber Engine Tweaks or
 CD PROJEKT RED. Back up your saves before using it.
 
 Platform: macOS arm64. Built against Cyberpunk 2077 v2.3.1 (Steam). GOG support is in progress.
 
-![CET Mac launcher](assets/screenshot.png)
+![NightCity Console launcher](assets/screenshot.png)
 
 ## Demo
 
-[Watch the demo](https://raw.githubusercontent.com/ysrdevs/CET-mac/main/assets/demo.mp4) (adding relic and perk points, weapons, and money, live in-game on macOS).
+[Watch the demo](https://raw.githubusercontent.com/ysrdevs/nightcity-console-mac/main/assets/demo.mp4) (adding relic and perk points, weapons, and money, live in-game on macOS).
 
 ## Screenshots
 
@@ -43,15 +47,15 @@ Prefer a walkthrough? Watch the install and usage video:
 
 [![Watch the install and usage video](https://img.youtube.com/vi/VOUMaNLSAV0/hqdefault.jpg)](https://youtu.be/VOUMaNLSAV0)
 
-1. Download `CET-Mac.dmg` from [Releases](../../releases).
-2. Open it and drag CET Mac into your Applications folder.
-3. Open CET Mac, click Install, then Play.
+1. Download `NightCity-Console-for-Mac.dmg` from [Releases](../../releases).
+2. Open it and drag NightCity Console into your Applications folder.
+3. Open NightCity Console, click Install, then Play.
 4. In-game, press the backtick/tilde key (`` ` ``) or F1 to open the console.
 
 No Terminal, no file editing. The app finds your game, installs the files (re-signing it so the console can
 load), and launches it. Steam Cloud saves keep working.
 
-Updating from an older version? After replacing the app, click Install once (it reads "Reinstall CET Mac"),
+Updating from an older version? After replacing the app, click Install once (it reads "Reinstall NightCity Console"),
 then Play. No need to uninstall first.
 
 ### Using the console in-game
@@ -62,7 +66,7 @@ Cmd+2 / Cmd+3**:
 - **Console** (Cmd+1) - type commands directly. Up/Down for history, Cmd+V to paste, `help` for the list.
 - **Items** (Cmd+2) - type to search 7,552 items, press **Enter** to spawn the top match, **Cmd+P** to pin
   it to your favorites. Set the quantity first if you want a stack.
-- **Quick** (Cmd+3) - one-click cheats (money, heal, godmode, perks/attributes/relic, level), your pinned
+- **Quick** (Cmd+3) - one-click cheats (money, heal, perks/attributes/relic, level), your pinned
   favorites, and teleport bookmarks.
 
 Every action shows a confirmation at the bottom so you can see exactly what was added.
@@ -88,7 +92,7 @@ Game.AddToInventory("Items.MaxDOSE", 5)    # CET-style line, also works
   `Game.AddToInventory` syntax.
 - **Pinned favorites** - pin items (Cmd+P) and they persist across restarts in a Quick tab, so your go-to
   gear is one keypress away.
-- **One-click cheats** - money, full heal, godmode, perks, attributes, relic points, set character level.
+- **One-click cheats** - money, full heal, perks, attributes, relic points, set character level.
 - **Teleport** with saved position bookmarks (save a spot, return to it later).
 - **Action confirmations** - every command reports what it just did.
 - Quest facts, and a generic `call <Class> <Method>` bridge that can invoke any observed RTTI method.
@@ -97,7 +101,7 @@ See [docs/COMMANDS.md](docs/COMMANDS.md) for the full list and known limits.
 
 ## How it works (short version)
 
-CET Mac injects into the arm64 game process with `DYLD_INSERT_LIBRARIES` (no SIP changes), resolves
+NightCity Console injects into the arm64 game process with `DYLD_INSERT_LIBRARIES` (no SIP changes), resolves
 REDengine's RTTI, and drives the script VM to call game functions with typed arguments. The console UI is
 Dear ImGui drawn from a `presentDrawable:` hook; input comes from an `NSApplication.sendEvent:` hook.
 Commands travel over a small file channel to the injected script engine.
@@ -116,7 +120,7 @@ For the full write-up of the reverse engineering and architecture, see [TECHNICA
 ## For developers (from source)
 
 ```bash
-git clone <this repo> && cd cet-mac
+git clone <this repo> && cd nightcity-console-mac
 ./tools/fetch-deps.sh        # pulls FridaGadget + RED4ext into deps/ (copies from a local install if present)
 ./dev/launch.sh              # builds the overlay, stages the payload into your game, and launches it
 ```

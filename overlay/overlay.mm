@@ -80,7 +80,7 @@ static void handleSubmit(const char* cmd) {
     if (strcmp(cmd, "help") == 0) {
         appendOut("items:  give <Items.X> <qty> | removeitem <Items.X> <qty> | money <n>");
         appendOut("        CET style: Game.AddToInventory(\"Items.X\", n)");
-        appendOut("char:   perks <n> | attrs <n> | relic <n> | level <n> | heal | godmode [off]");
+        appendOut("char:   perks <n> | attrs <n> | relic <n> | level <n> | heal");
         appendOut("world:  teleport save <name> | teleport <name> | teleport <x> <y> <z> | setfact <name> <n>");
         appendOut("misc:   call <Class> <method> [args] | sig <Class> <method> | convdump | clear | help");
         appendOut("tip: Up/Down = command history. Bookmark spots: 'teleport save home' then 'teleport home'");
@@ -286,13 +286,13 @@ static void runCommand(const std::string& cmd) {
 static std::string g_lastAction;
 static void runLabeled(const std::string& cmd, const std::string& label) { g_lastAction = label; runCommand(cmd); }
 
-// persistent pinned-favorite items (~/Library/Application Support/CETMac/favorites.txt)
+// persistent pinned-favorite items (~/Library/Application Support/NightCityConsole/favorites.txt)
 struct Fav { std::string id, name; };
 static std::vector<Fav> g_favorites;
 static bool g_favLoaded = false;
 
 static std::string favPath() {
-    NSString* dir = [NSHomeDirectory() stringByAppendingPathComponent:@"Library/Application Support/CETMac"];
+    NSString* dir = [NSHomeDirectory() stringByAppendingPathComponent:@"Library/Application Support/NightCityConsole"];
     [[NSFileManager defaultManager] createDirectoryAtPath:dir withIntermediateDirectories:YES attributes:nil error:nil];
     return std::string([[dir stringByAppendingPathComponent:@"favorites.txt"] UTF8String]);
 }
@@ -382,9 +382,10 @@ static void drawQuickTab() {
     ImGui::Separator();
     ImGui::TextDisabled("One-click cheats:");
     if (ImGui::Button("Money +50k")) runLabeled("money 50000", "Money +50k"); ImGui::SameLine();
-    if (ImGui::Button("Heal")) runLabeled("heal", "Healed"); ImGui::SameLine();
-    if (ImGui::Button("Godmode")) runLabeled("godmode", "Godmode on"); ImGui::SameLine();
-    if (ImGui::Button("Godmode off")) runLabeled("godmode off", "Godmode off");
+    if (ImGui::Button("Heal")) runLabeled("heal", "Healed");
+    ImGui::BeginDisabled();   // Godmode does not work yet (the game's god-mode system isn't honoring it) - hidden until fixed
+    ImGui::Button("Godmode (not working yet)");
+    ImGui::EndDisabled();
     if (ImGui::Button("Perks +10")) runLabeled("perks 10", "Perks +10"); ImGui::SameLine();
     if (ImGui::Button("Attrs +10")) runLabeled("attrs 10", "Attrs +10"); ImGui::SameLine();
     if (ImGui::Button("Relic +10")) runLabeled("relic 10", "Relic +10"); ImGui::SameLine();
@@ -400,7 +401,7 @@ static void drawQuickTab() {
 static void drawConsole() {
     ImGui::SetNextWindowSize(ImVec2(860, 480), ImGuiCond_FirstUseEver);
     ImGui::SetNextWindowPos(ImVec2(48, 48), ImGuiCond_FirstUseEver);
-    ImGui::Begin("CET Mac  ( ` or F1 to toggle )");
+    ImGui::Begin("NightCity Console  ( ` or F1 to toggle )");
     ImGui::TextDisabled("Cmd+1 Console    Cmd+2 Items    Cmd+3 Quick");
     int req = -1;
     if (g_tabReq.exchange(false)) req = g_activeTab.load();   // a keyboard tab-switch this frame

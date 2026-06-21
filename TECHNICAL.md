@@ -1,6 +1,6 @@
-# CET Mac: how it works and how it was built
+# NightCity Console: how it works and how it was built
 
-This document explains the internals: how CET Mac injects into Cyberpunk 2077 on macOS, how it
+This document explains the internals: how NightCity Console injects into Cyberpunk 2077 on macOS, how it
 calls into the game's engine, how the in-game overlay is drawn, and how the whole thing was reverse
 engineered. It is meant for contributors and for anyone curious about REDengine on Apple Silicon.
 
@@ -11,7 +11,7 @@ hashes are specific to that build.
 
 Cyber Engine Tweaks (CET) is the standard cheat/scripting console for Cyberpunk 2077, but it is
 Windows-only (it relies on D3D12 and Windows-specific hooking). The macOS build has no equivalent.
-CET Mac rebuilds the core of that capability from scratch on macOS: inject code into the running
+NightCity Console rebuilds the core of that capability from scratch on macOS: inject code into the running
 game, resolve the engine's runtime type system (RTTI), call game functions with real arguments, and
 draw a console on the live frame.
 
@@ -71,7 +71,7 @@ a function we build that frame by hand:
 
 Important detail: you must supply exactly the number of parameters the function declares (or stop at a
 genuinely optional trailing param). Under-supplying makes the handler read `ParamEnd` as a value opcode
-and crash. CET Mac logs each function's live signature so commands are built against the real shape.
+and crash. NightCity Console logs each function's live signature so commands are built against the real shape.
 
 Items use `ItemID.FromTDBID(TweakDBID)` to build a proper `gameItemID` (correct rngSeed and structure);
 hand-built IDs validate but never commit, so `FromTDBID` is mandatory.
@@ -155,7 +155,7 @@ Two macOS-specific findings shaped this:
 - `launcher/build-app.sh` compiles the SwiftUI app with `swiftc`, assembles the `.app` bundle, copies the
   payload into `Contents/Resources`, and ad-hoc signs it for local testing.
 - `tools/sign-notarize.sh` re-signs everything inside-out with a Developer ID and hardened runtime,
-  notarizes the app and the dmg with `notarytool`, staples the tickets, and produces `dist/CET-Mac.dmg`
+  notarizes the app and the dmg with `notarytool`, staples the tickets, and produces `dist/NightCity-Console-for-Mac.dmg`
   that passes Gatekeeper with no warnings. You run this with your own Apple Developer ID.
 
 ## 10. Known limits and where to contribute

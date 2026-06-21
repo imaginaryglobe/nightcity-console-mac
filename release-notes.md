@@ -1,14 +1,14 @@
-## CET Mac v1.0.0
+## NightCity Console v1.0.0
 
 An in-game cheat/mod console for Cyberpunk 2077 on macOS (Apple Silicon). The kind of thing
 Cyber Engine Tweaks does on Windows, on a platform where CET doesn't exist. Press a key in-game,
 a console appears, and you type commands. CET item codes from the internet paste in and work as-is.
 
-![CET Mac launcher](https://raw.githubusercontent.com/ysrdevs/CET-mac/main/assets/screenshot.png)
+![NightCity Console launcher](https://raw.githubusercontent.com/ysrdevs/nightcity-console-mac/main/assets/screenshot.png)
 
 ### Install (no Terminal needed)
-1. Download **CET-Mac.dmg** (or **CET-Mac.zip**) below.
-2. Open it and run **CET Mac**.
+1. Download **NightCity-Console-for-Mac.dmg** (or **NightCity-Console-for-Mac.zip**) below.
+2. Open it and run **NightCity Console**.
 3. Click **Install**, then **Play**.
 4. In-game, press the backtick/tilde key (`` ` ``) or **F1** to open the console. Type `help`.
 
@@ -26,7 +26,7 @@ and the game exits cleanly.
 - Power tools: a generic `call <Class> <Method>` bridge to any observed RTTI method.
 - Console quality of life: command history (up/down) and clipboard (Cmd+V/C/X/A).
 
-Full command list: [docs/COMMANDS.md](https://github.com/ysrdevs/CET-mac/blob/main/docs/COMMANDS.md).
+Full command list: [docs/COMMANDS.md](https://github.com/ysrdevs/nightcity-console-mac/blob/main/docs/COMMANDS.md).
 
 ### Known limits
 - godmode registers with the engine but on 2.3.1 still takes hit damage (it prevents death, not damage).
@@ -40,7 +40,7 @@ so back them up. Not affiliated with CD PROJEKT RED.
 
 ### For developers
 Source, build instructions, and a full reverse-engineering write-up are in the repo
-([TECHNICAL.md](https://github.com/ysrdevs/CET-mac/blob/main/TECHNICAL.md)).
+([TECHNICAL.md](https://github.com/ysrdevs/nightcity-console-mac/blob/main/TECHNICAL.md)).
 
 ### Credits
 Built on Dear ImGui, Frida, and the RED4ext macOS port. MIT licensed. If it saved you some hassle,

@@ -1,5 +1,5 @@
 #!/bin/bash
-# Sign (Developer ID + hardened runtime), notarize, and package "CET Mac.app" into a .dmg and a .zip.
+# Sign (Developer ID + hardened runtime), notarize, and package "NightCity Console.app" into a .dmg and a .zip.
 # YOU run this with YOUR Apple Developer ID - it never asks the assistant for credentials.
 #
 # One-time setup (stores your notary credentials in the keychain):
@@ -12,9 +12,9 @@
 #   ./tools/sign-notarize.sh
 set -e
 cd "$(dirname "$0")/.."
-APP="build/CET Mac.app"
-DMG="dist/CET-Mac.dmg"
-ZIP="dist/CET-Mac.zip"          # distributable zip (made from the stapled app)
+APP="build/NightCity Console.app"
+DMG="dist/NightCity-Console-for-Mac.dmg"
+ZIP="dist/NightCity-Console-for-Mac.zip"          # distributable zip (made from the stapled app)
 SUBZIP="dist/_notarize.zip"     # temporary zip used only for the notarization upload
 
 : "${SIGN_IDENTITY:?set SIGN_IDENTITY to 'Developer ID Application: NAME (TEAMID)'}"
@@ -45,7 +45,7 @@ rm -f "$ZIP"
 # 2) .dmg with an /Applications shortcut + drag-here layout, then notarize + staple
 #    the dmg itself so the downloaded image also passes Gatekeeper offline.
 rm -f "$DMG"
-VOL="CET Mac"; STAGE="build/dmg"; RWDMG="dist/_rw.dmg"; APPNAME="$(basename "$APP")"
+VOL="NightCity Console"; STAGE="build/dmg"; RWDMG="dist/_rw.dmg"; APPNAME="$(basename "$APP")"
 rm -rf "$STAGE"; mkdir -p "$STAGE"
 ditto "$APP" "$STAGE/$APPNAME"
 ln -s /Applications "$STAGE/Applications"            # the shortcut users drag into

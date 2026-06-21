@@ -1,7 +1,7 @@
 # Third-party components
 
-CET Mac bundles or builds against the following third-party software.
-Each retains its own license. CET Mac distributes **none** of CD PROJEKT RED's
+NightCity Console bundles or builds against the following third-party software.
+Each retains its own license. NightCity Console distributes **none** of CD PROJEKT RED's
 game files - players use their own legally-owned copy of Cyberpunk 2077.
 
 | Component | Role | License | Source |
