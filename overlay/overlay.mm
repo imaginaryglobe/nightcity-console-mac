@@ -19,6 +19,7 @@
 #include <deque>
 #include <mutex>
 #include <atomic>
+#include <unordered_map>
 #include <dispatch/dispatch.h>
 #include <dlfcn.h>
 #include <cctype>
@@ -33,7 +34,11 @@ static void olog(const char* fmt, ...) {
 }
 
 // ---- state ----
-static IMP g_origPresent = NULL;
+// presentDrawable: is implemented per-GPU-family command-buffer class (AGXG13X/G14/G15/G16F/...). The class
+// the game uses varies by chip, so we swizzle EVERY command-buffer class that has the method and keep each
+// one's original IMP keyed by its Method, looked up by the live buffer's class at call time.
+static std::unordered_map<void*, IMP> g_origPresents;   // Method* -> original presentDrawable IMP
+static SEL g_presentSel = NULL;
 static IMP g_origSendEvent = NULL;
 static bool g_imguiInit = false;
 static unsigned long g_frame = 0;
@@ -506,7 +511,9 @@ static void my_presentDrawable(id self, SEL _cmd, id drawable) {
         @try { renderOverlay((id<MTLCommandBuffer>)self, (id<CAMetalDrawable>)drawable); }
         @catch (NSException* e) { olog("render exception: %s", [[e reason] UTF8String]); }
     }
-    ((void(*)(id, SEL, id))g_origPresent)(self, _cmd, drawable);
+    Method m = class_getInstanceMethod(object_getClass(self), _cmd);
+    auto it = g_origPresents.find((void*)m);
+    if (it != g_origPresents.end()) ((void(*)(id, SEL, id))it->second)(self, _cmd, drawable);
 }
 
 static void my_sendEvent(id self, SEL _cmd, NSEvent* ev) {
@@ -546,30 +553,26 @@ static void my_sendEvent(id self, SEL _cmd, NSEvent* ev) {
 }
 
 static void installPresentHook() {
-    Class cbClass = nil;
-    id<MTLDevice> dev = MTLCreateSystemDefaultDevice();
-    if (dev) {
-        id<MTLCommandQueue> q = [dev newCommandQueue];
-        id<MTLCommandBuffer> cb = [q commandBuffer];
-        if (cb) cbClass = object_getClass(cb);
+    g_presentSel = sel_registerName("presentDrawable:");
+    int n = objc_getClassList(NULL, 0);
+    Class* list = (Class*)malloc(sizeof(Class) * n);
+    objc_getClassList(list, n);
+    int hooked = 0;
+    // Swizzle EVERY command-buffer class that implements presentDrawable: (dedupe inherited methods by Method
+    // pointer). This catches whichever AGX family class the game presents through, on any chip.
+    for (int i = 0; i < n; i++) {
+        const char* nm = class_getName(list[i]);
+        if (!nm || !strstr(nm, "CommandBuffer")) continue;
+        Method m = class_getInstanceMethod(list[i], g_presentSel);
+        if (!m) continue;
+        if (g_origPresents.count((void*)m)) continue;   // already hooked (shared/inherited method)
+        g_origPresents[(void*)m] = method_getImplementation(m);
+        method_setImplementation(m, (IMP)my_presentDrawable);
+        hooked++;
+        olog("hooked presentDrawable: on %s", nm);
     }
-    if (!cbClass) {
-        int n = objc_getClassList(NULL, 0);
-        Class* list = (Class*)malloc(sizeof(Class) * n);
-        objc_getClassList(list, n);
-        for (int i = 0; i < n; i++) {
-            const char* nm = class_getName(list[i]);
-            if (nm && strstr(nm, "FamilyCommandBuffer") && strncmp(nm, "AGX", 3) == 0) { cbClass = list[i]; break; }
-        }
-        free(list);
-    }
-    if (!cbClass) { olog("FATAL: could not find a command-buffer class"); return; }
-    SEL sel = sel_registerName("presentDrawable:");
-    Method m = class_getInstanceMethod(cbClass, sel);
-    if (!m) { olog("FATAL: no presentDrawable: on %s", class_getName(cbClass)); return; }
-    g_origPresent = method_getImplementation(m);
-    method_setImplementation(m, (IMP)my_presentDrawable);
-    olog("hooked presentDrawable: on %s", class_getName(cbClass));
+    free(list);
+    if (!hooked) olog("FATAL: no command-buffer class with presentDrawable: found");
 }
 
 static void installInputHook() {

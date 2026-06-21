@@ -892,6 +892,20 @@ rpc.exports = {
                 log('rectrace ON (counts recordsByID lookups, logs MISSES; run again to stop)');
             }catch(e){ log('rectrace attach err '+e); }
         }
+        // cybermodman: localization-lookup tracer. Hooks the loc-manager resolve (FUN_102f6acfc) and
+        // logs the requested key(s). Used to see whether the clone item's displayName LocKey (0xdf3)
+        // ever reaches the localizer during give/hover, vs the base item.
+        let _loctrace=null, _loccnt=0;
+        function locTraceToggle(){
+            if(_loctrace){ try{_loctrace.detach();}catch(e){} _loctrace=null; log('loctrace OFF (logged '+_loccnt+' lookups)'); return; }
+            _loccnt=0;
+            try{
+                _loctrace=Interceptor.attach(getModuleBase().add(0x2f6acfc), {
+                    onEnter:function(a){ try{ if(_loccnt<120){ _loccnt++; log('LOC key2=0x'+a[2].toString(16)+' key3=0x'+a[3].toString(16)); } }catch(e){} }
+                });
+                log('loctrace ON (logs localization keys; run again to stop)');
+            }catch(e){ log('loctrace attach err '+e); }
+        }
         function resolveExport(name){ if(_expCache[name]!==undefined) return _expCache[name]; let r=null;
             try{ if(typeof Module!=='undefined'){
                 if(typeof Module.findExportByName==='function'){ const p=Module.findExportByName(null,name); if(p&&!p.isNull()) r=p; }
@@ -951,6 +965,7 @@ rpc.exports = {
             if(t[0]==='metalrecon'){ metalRecon(); return; }   // Phase-2 recon: works at menu too
             if(t[0]==='tweakload'){ try{ var ex=resolveExport('cybermodman_tweakReload'); if(!ex||ex.isNull()){ log('tweakload: cybermodman_tweakReload export NOT FOUND'); return; } new NativeFunction(ex,'void',[])(); log('tweakload: cybermodman_tweakReload() called - check TweakXL.log'); }catch(e){ log('tweakload err '+e); } return; }   // exempt from in-game guard (drives TweakXL apply)
             if(t[0]==='rectrace'){ recTraceToggle(); return; }   // toggle recordsByID-miss tracer
+            if(t[0]==='loctrace'){ locTraceToggle(); return; }   // toggle localization-key tracer
             if(!player){ log('NOT IN GAME yet: '+line); return; }
             if(t[0]==='give'&&t[1]){ doGive(t[1], Math.max(1,parseInt(t[2]||'1')||1)); return; }
             if(t[0]==='money'&&t[1]){ doGive('Items.money', Math.max(1,parseInt(t[1])||1), true); return; }   // currency: always one bulk add
