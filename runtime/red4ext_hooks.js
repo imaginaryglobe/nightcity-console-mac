@@ -574,7 +574,7 @@ rpc.exports = {
         let player=null, playerVt=null, fromtd=null, depth=0, busy=false, lastCmd=''; const pendingQ=[];
         const playerCands=[], playerCandSet=new Set(); let devOwner=null;  // cached dev-data owner (the local player)
         function addCand(ctx){ const k=ctx.toString(); if(playerCandSet.has(k)) return; playerCandSet.add(k); playerCands.push(ctx); if(playerCands.length>8){ const old=playerCands.shift(); playerCandSet.delete(old.toString()); } }
-        const instReg={}, seenVt=new Set();
+        const instReg={}, seenVt=new Set(); let nameHookInstalled=false;
         const refcnt=Memory.alloc(8); refcnt.writeU32(0x100000); refcnt.add(4).writeU32(0x100000);
         function nameOf(metaObj){ try{ const gn=metaObj.readPointer().add(0x10).readPointer(); return '0x'+new NativeFunction(gn,'uint64',['pointer'])(metaObj).toString(16);}catch(e){return null;} }
         function hexp(pp,nn){ try{const b=new Uint8Array(pp.readByteArray(nn));let r='';for(let i=0;i<b.length;i++)r+=('0'+b[i].toString(16)).slice(-2)+' ';return r.trim();}catch(e){return 'ERR';} }
@@ -794,6 +794,14 @@ rpc.exports = {
             try{ callFunc(sl.fn, dd, sl.retType, ['Level', ''+n, '0', 'true']); log('*** level set to '+n+' ***'); }
             catch(e){ log('level err: '+e); }
         }
+        // street cred rides the same PlayerDevelopmentData.SetLevel path as level - only the
+        // gamedataProficiencyType member differs ('StreetCred' vs 'Level'). Caps at 50; SetLevel clamps.
+        function doStreetCred(n){
+            const dd=getDevData(); if(!dd){ log('streetcred: no PlayerDevelopmentData'); return; }
+            const sl=resolveAny(['PlayerDevelopmentData'],'SetLevel'); if(!sl){ log('streetcred: SetLevel not found'); return; }
+            try{ callFunc(sl.fn, dd, sl.retType, ['StreetCred', ''+n, '0', 'true']); log('*** street cred set to '+n+' ***'); }
+            catch(e){ log('streetcred err: '+e); }
+        }
         const tpMarks={};   // name -> ArrayBuffer(16) saved Vector4 (session-only)
         function doTeleport(t){
             const gi=getGI(); if(!gi){ log('teleport: no GameInstance'); return; }
@@ -880,32 +888,6 @@ rpc.exports = {
             catch(e){ log('AddDevelopmentPoints err: '+e); } }
         // ===== Phase 2 recon: identify the Metal present path (raw libobjc; Frida ObjC bridge is absent) =====
         let mrArmed=false, mrCap=false, _objc=null, _expCache={};
-        let _rectrace=null, _recmiss=0, _rectotal=0;
-        function recTraceToggle(){
-            if(_rectrace){ try{_rectrace.detach();}catch(e){} _rectrace=null; log('rectrace OFF (total='+_rectotal+' lookups, '+_recmiss+' misses)'); return; }
-            _recmiss=0; _rectotal=0;
-            try{
-                _rectrace=Interceptor.attach(getModuleBase().add(0x2b745d0), {
-                    onEnter:function(a){ this.out=a[0]; this.id=a[2]; },
-                    onLeave:function(){ try{ _rectotal++; if(this.out.readPointer().isNull() && _recmiss<300){ _recmiss++; log('RECMISS id=0x'+this.id.and(ptr('0xffffffffff')).toString(16)); } }catch(e){} }
-                });
-                log('rectrace ON (counts recordsByID lookups, logs MISSES; run again to stop)');
-            }catch(e){ log('rectrace attach err '+e); }
-        }
-        // cybermodman: localization-lookup tracer. Hooks the loc-manager resolve (FUN_102f6acfc) and
-        // logs the requested key(s). Used to see whether the clone item's displayName LocKey (0xdf3)
-        // ever reaches the localizer during give/hover, vs the base item.
-        let _loctrace=null, _loccnt=0;
-        function locTraceToggle(){
-            if(_loctrace){ try{_loctrace.detach();}catch(e){} _loctrace=null; log('loctrace OFF (logged '+_loccnt+' lookups)'); return; }
-            _loccnt=0;
-            try{
-                _loctrace=Interceptor.attach(getModuleBase().add(0x2f6acfc), {
-                    onEnter:function(a){ try{ if(_loccnt<120){ _loccnt++; log('LOC key2=0x'+a[2].toString(16)+' key3=0x'+a[3].toString(16)); } }catch(e){} }
-                });
-                log('loctrace ON (logs localization keys; run again to stop)');
-            }catch(e){ log('loctrace attach err '+e); }
-        }
         function resolveExport(name){ if(_expCache[name]!==undefined) return _expCache[name]; let r=null;
             try{ if(typeof Module!=='undefined'){
                 if(typeof Module.findExportByName==='function'){ const p=Module.findExportByName(null,name); if(p&&!p.isNull()) r=p; }
@@ -964,8 +946,13 @@ rpc.exports = {
             const t=raw.split(/\s+/);
             if(t[0]==='metalrecon'){ metalRecon(); return; }   // Phase-2 recon: works at menu too
             if(t[0]==='tweakload'){ try{ var ex=resolveExport('cybermodman_tweakReload'); if(!ex||ex.isNull()){ log('tweakload: cybermodman_tweakReload export NOT FOUND'); return; } new NativeFunction(ex,'void',[])(); log('tweakload: cybermodman_tweakReload() called - check TweakXL.log'); }catch(e){ log('tweakload err '+e); } return; }   // exempt from in-game guard (drives TweakXL apply)
-            if(t[0]==='rectrace'){ recTraceToggle(); return; }   // toggle recordsByID-miss tracer
-            if(t[0]==='loctrace'){ locTraceToggle(); return; }   // toggle localization-key tracer
+            if(t[0]==='tweakdumpflat'&&t[1]&&t[2]){ try{ var ex=resolveExport('cybermodman_tweakDumpFlat'); if(!ex||ex.isNull()){ log('tweakdumpflat: export NOT FOUND'); return; } var sr=Memory.allocUtf8String(t[1]); var spp=Memory.allocUtf8String(t[2]); new NativeFunction(ex,'void',['pointer','pointer'])(sr,spp); log('tweakdumpflat: '+t[1]+'.'+t[2]+' -> /tmp/tweakxl_dump.txt'); }catch(e){ log('tweakdumpflat err '+e); } return; }   // dump ONE flat by exact <Record> <prop>
+            if(t[0]==='cmnreload'){ try{ var n=cmnLoad(); log('cmnreload: loaded '+n+' custom name(s); see /tmp/cybermodman_names.log'); }catch(e){ log('cmnreload err '+e); } return; }   // hot-reload cybermodman_names.json
+            if(t[0]==='archiveload'){ try{ var ex=resolveExport('cybermodman_archiveReload'); if(!ex||ex.isNull()){ log('archiveload: cybermodman_archiveReload export NOT FOUND'); return; } new NativeFunction(ex,'void',[])(); log('archiveload: cybermodman_archiveReload() called - check ArchiveXL.log'); }catch(e){ log('archiveload err '+e); } return; }   // drives ArchiveXL extension bring-up
+            if(t[0]==='archiveprobe'){ try{ var ex=resolveExport('cybermodman_archiveProbeLoadTexts'); if(!ex||ex.isNull()){ log('archiveprobe: cybermodman_archiveProbeLoadTexts export NOT FOUND'); return; } new NativeFunction(ex,'void',[])(); log('archiveprobe: cybermodman_archiveProbeLoadTexts() called - check ArchiveXL.log'); }catch(e){ log('archiveprobe err '+e); } return; }   // wall-B probe: drive LoadTexts directly
+            if(t[0]==='archiveinject'){ try{ var ex=resolveExport('cybermodman_archiveInjectName'); if(!ex||ex.isNull()){ log('archiveinject: cybermodman_archiveInjectName export NOT FOUND'); return; } new NativeFunction(ex,'void',[])(); log('archiveinject: cybermodman_archiveInjectName() called - check ArchiveXL.log'); }catch(e){ log('archiveinject err '+e); } return; }   // wall-B exp: overwrite live onscreens text
+            if(t[0]==='archivehookname'){ try{ var ex=resolveExport('cybermodman_archiveHookName'); if(!ex||ex.isNull()){ log('archivehookname: cybermodman_archiveHookName export NOT FOUND'); return; } new NativeFunction(ex,'void',[])(); log('archivehookname: cybermodman_archiveHookName() called - check ArchiveXL.log'); }catch(e){ log('archivehookname err '+e); } return; }   // wall-B exp: hook item display-name resolver
+            if(t[0]==='archivename'){ try{ if(nameHookInstalled){ log('archivename: already installed'); return; } var naddr=base.add(0x378a4b8); var ncalls=0; Interceptor.attach(naddr,{ onEnter:function(a){ this.sret=this.context.x8; }, onLeave:function(r){ try{ var b=this.sret; if(!b||b.isNull()) return; var len=b.add(0x14).readU32(); var heap=(len&0x40000000)!==0; var alen=len&0x3FFFFFFF; var tp=heap?b.readPointer():b; var txt=''; try{ txt=tp.readUtf8String(alen); }catch(e){} if(ncalls<25){ ncalls++; log('namehook #'+ncalls+' x8='+b+' len='+alen+' heap='+heap+' text="'+txt+'"'); } if(txt && txt.indexOf('exington')>=0){ var s='CyberModMan!'; b.writeUtf8String(s); b.add(0x14).writeU32(s.length); b.add(0x18).writePointer(ptr(0)); log('namehook OVERWROTE "'+txt+'" -> '+s); } }catch(e){ log('namehook onLeave err '+e); } } }); nameHookInstalled=true; log('archivename: Frida interceptor attached at '+naddr+' (open inventory, hover a Lexington)'); }catch(e){ log('archivename err '+e); } return; }   // wall-B: DIRECT Frida interceptor on item name resolver (RED4ext plugin hooks dont fire)
             if(!player){ log('NOT IN GAME yet: '+line); return; }
             if(t[0]==='give'&&t[1]){ doGive(t[1], Math.max(1,parseInt(t[2]||'1')||1)); return; }
             if(t[0]==='money'&&t[1]){ doGive('Items.money', Math.max(1,parseInt(t[1])||1), true); return; }   // currency: always one bulk add
@@ -983,6 +970,7 @@ rpc.exports = {
             if((t[0]==='setfact'||t[0]==='addfact')&&t[1]){ doSetFact(t[1], parseInt(t[2]||'1')||1); return; }
             if(t[0]==='summon'||t[0]==='car'){ doSummon(); return; }
             if(t[0]==='level'&&t[1]){ doLevel(Math.max(1,parseInt(t[1])||1)); return; }
+            if((t[0]==='streetcred'||t[0]==='sc')&&t[1]){ doStreetCred(Math.max(1,Math.min(50,parseInt(t[1])||1))); return; }
             if(t[0]==='teleport'||t[0]==='tp'){ doTeleport(t); return; }
             if(t[0]==='convdump'){ convdump(); return; }
             if(t[0]==='devdump'){ probeFuncs('PlayerDevelopmentSystem',['GetData','GetDevelopmentData','GetDevelopmentDataInternal','GetInstance']);
@@ -1032,4 +1020,97 @@ rpc.exports = {
             onLeave:function(r){ depth--; if(busy) return; if(pendingQ.length&&depth===0){ const cmd=pendingQ.shift(); busy=true; try{ execute(cmd); }catch(e){ log('exec err '+e); } busy=false; } }
         });
     }catch(e){ log('MINI-CET v3 FAILED: '+e); }
+
+// ===== cybermodman cmn loc-hook (re-merged after CET update) =====
+var cmnB = getModuleBase();
+var CMN_CONFIG = '/Users/ysr/Library/Application Support/Steam/steamapps/common/Cyberpunk 2077/red4ext/cybermodman_names.json';
+var CMN_LOG = '/tmp/cybermodman_names.log';
+var cmnMap = {};
+var cmnHit = {}; // cybermodman: runtime fill hit-counter per LocKey (throttled logging)
+var cmnStrCache = {}; // text -> persistent Frida buffer (kept alive; reused)
+var cmnBase = null;
+var cmnReserve = null;   // NativeFunction(FUN_10002c904): grows a CString to a game-pool heap buffer
+var cmnAttached = false;
+function cmnLog(s){ try{ var f=new File(CMN_LOG,'a'); f.write(s+'\n'); f.flush(); f.close(); }catch(e){} try{ console.log('[CMN] '+s); }catch(e2){} }
+function cmnLoad(){
+    cmnMap = {}; var n = 0;
+    try {
+        var txt = File.readAllText(CMN_CONFIG);
+        if (!txt) { cmnLog('no config file at '+CMN_CONFIG); return 0; }
+        var obj = JSON.parse(txt);
+        for (var k in obj) {
+            if (!obj.hasOwnProperty(k)) continue;
+            var radix = (k.indexOf('0x')===0 || k.indexOf('0X')===0) ? 16 : 10;
+            var kp = parseInt(k, radix);
+            if (isNaN(kp)) { cmnLog('  skip non-numeric key "'+k+'"'); continue; }
+            var ki = kp >>> 0;
+            cmnMap[ki] = String(obj[k]);
+            n++;
+            cmnLog('  map LocKey '+ki+' (0x'+ki.toString(16)+') -> "'+cmnMap[ki]+'"');
+        }
+        cmnLog('loaded '+n+' custom name(s)');
+    } catch (e) { cmnLog('config error: '+e); }
+    return n;
+}
+// Write a CString into the engine's output buffer at b. Short strings go inline (proven path).
+// Long strings use a persistent buffer + the 0x80000000 'not-owned' flag so the engine reads the
+// text but its destructor SKIPS free (verified: dtor frees only when (length>>30)!=2). No allocator
+// mismatch, any length safe. (CString: ptr/inline @0x00, capacity @0x10, length+flags @0x14.)
+function cmnPutStr(b, s){
+    if (s.length < 0x14) {                         // short -> inline (proven)
+        b.writeUtf8String(s);
+        b.add(0x14).writeU32(s.length);
+        b.add(0x18).writePointer(ptr(0));
+        return;
+    }
+    // long -> game-allocated heap CString so the engine both READS (0x40000000) and FREES it safely
+    // (FUN_10002c904 allocs from the PoolString pool when allocator@0x18==0; the dtor frees via the
+    // same pool). We zero @0x18 first, grow, then write our text into the returned game buffer.
+    try {
+        if (cmnReserve) {
+            b.add(0x18).writePointer(ptr(0));       // default pool allocator
+            cmnReserve(b, s.length);                // alloc -> ptr@0x00, capacity@0x10, len|0x40000000
+            var p = b.readPointer();
+            if (p && !p.isNull()) {
+                p.writeUtf8String(s);               // write text into game buffer
+                b.add(0x14).writeU32((s.length & 0x3FFFFFFF) | 0x40000000);
+                return;
+            }
+        }
+    } catch (e) { try { cmnLog('reserve err: '+e); } catch (_) {} }
+    var t = s.substr(0, 19);                        // fallback: inline-truncate (never blank/crash)
+    b.writeUtf8String(t);
+    b.add(0x14).writeU32(t.length);
+    b.add(0x18).writePointer(ptr(0));
+}
+function cmnInstall(){
+    if (cmnAttached) return;
+    var cmnB = getModuleBase();
+    if (!cmnB) { cmnLog('module cmnB not found; cannot install'); return; }
+    cmnBase = cmnB;
+    try { cmnReserve = new NativeFunction(cmnB.add(0x2c904), 'void', ['pointer','uint']); } catch (e) { cmnLog('reserve fn err: '+e); }
+    var addr = cmnB.add(0x2f6ea14); // FUN_102f6ea14 loc-map lookup: out=x8, key=x1, &found=x3
+    try {
+        Interceptor.attach(addr, {
+            onEnter: function (a) { this.out = this.context.x8; this.k1 = this.context.x1; this.fp = this.context.x3; },
+            onLeave: function (r) {
+                try {
+                    if (!this.k1) return;
+                    var name = cmnMap[this.k1.toUInt32() >>> 0];
+                    if (name === undefined) return;
+                    var __k = this.k1.toUInt32() >>> 0;
+                    if (cmnHit[__k] === undefined) cmnHit[__k] = 0;
+                    if (cmnHit[__k]++ < 4) cmnLog('HIT key='+__k+' (0x'+__k.toString(16)+') fill="'+String(name).substring(0,48)+'"');
+                    var b = this.out; if (!b || b.isNull()) return;
+                    cmnPutStr(b, name); // inline (short) or not-owned persistent buffer (long)
+                    if (this.fp && !this.fp.isNull()) { try { this.fp.writeU8(1); } catch (e) {} } // force found=1
+                } catch (e) {}
+            }
+        });
+        cmnAttached = true;
+        cmnLog('interceptor attached at '+addr+' (FUN_102f6ea14)');
+    } catch (e) { cmnLog('attach error: '+e); }
+}
+try { cmnLog('=== cybermodman custom-names init ==='); cmnLoad(); cmnInstall(); } catch (e) { try { console.log('[CMN] init err '+e); } catch (_) {} }
+
 })();

@@ -2,31 +2,31 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-    <key>CFBundleName</key>
-    <string>NightCity Console</string>
-    <key>CFBundleDisplayName</key>
-    <string>NightCity Console</string>
-    <key>CFBundleIdentifier</key>
-    <string>dev.ysr.nightcityconsole</string>
-    <key>CFBundleExecutable</key>
-    <string>NightCityConsole</string>
-    <key>CFBundleIconFile</key>
-    <string>AppIcon</string>
-    <key>CFBundlePackageType</key>
-    <string>APPL</string>
-    <key>CFBundleShortVersionString</key>
-    <string>1.3.1</string>
-    <key>CFBundleVersion</key>
-    <string>1.3.1</string>
-    <key>LSMinimumSystemVersion</key>
-    <string>12.0</string>
-    <key>LSApplicationCategoryType</key>
-    <string>public.app-category.games</string>
-    <key>NSHighResolutionCapable</key>
-    <true/>
-    <key>LSArchitecturePriority</key>
-    <array>
-        <string>arm64</string>
-    </array>
+	<key>CFBundleDisplayName</key>
+	<string>NightCity Console</string>
+	<key>CFBundleExecutable</key>
+	<string>NightCityConsole</string>
+	<key>CFBundleIconFile</key>
+	<string>AppIcon</string>
+	<key>CFBundleIdentifier</key>
+	<string>dev.ysr.nightcityconsole</string>
+	<key>CFBundleName</key>
+	<string>NightCity Console</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<key>CFBundleShortVersionString</key>
+	<string>1.3.2</string>
+	<key>CFBundleVersion</key>
+	<string>1.3.2</string>
+	<key>LSApplicationCategoryType</key>
+	<string>public.app-category.games</string>
+	<key>LSArchitecturePriority</key>
+	<array>
+		<string>arm64</string>
+	</array>
+	<key>LSMinimumSystemVersion</key>
+	<string>12.0</string>
+	<key>NSHighResolutionCapable</key>
+	<true/>
 </dict>
 </plist>

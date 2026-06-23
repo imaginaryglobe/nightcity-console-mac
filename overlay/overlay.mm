@@ -55,10 +55,59 @@ static int g_historyPos = -1;                // -1 = current edit line; else ind
 static const char* OUT_PATH = "/tmp/cp2077_out.txt";
 static const char* CMD_PATH = "/tmp/cp2077_cmd.txt";
 
+// ---- bisection kill-switch (NCC_MODE env): full = hook + render (default),
+// passthru = hook present but never render, off = don't swizzle present at all.
+// Lets a tester localize stutter in-game without rebuilding. ----
+enum NccMode { NCC_FULL = 0, NCC_PASSTHRU = 1, NCC_OFF = 2 };
+static NccMode g_mode = NCC_FULL;
+static const char* modeName() { return g_mode == NCC_OFF ? "off" : g_mode == NCC_PASSTHRU ? "passthru" : "full"; }
+static void readMode() {
+    char buf[32] = {0};
+    const char* m = getenv("NCC_MODE");                 // 1) env var (terminal/dev launch)
+    if (!m) {                                            // 2) else ~/nightcity_mode.txt (for the .app)
+        const char* home = getenv("HOME");
+        if (home) {
+            char path[1024]; snprintf(path, sizeof(path), "%s/nightcity_mode.txt", home);
+            FILE* f = fopen(path, "r");
+            if (f) { if (fgets(buf, sizeof(buf), f)) m = buf; fclose(f); }
+        }
+    }
+    if (!m) return;
+    if (!strncmp(m, "off", 3)) g_mode = NCC_OFF;
+    else if (!strncmp(m, "passthru", 8)) g_mode = NCC_PASSTHRU;
+    else g_mode = NCC_FULL;
+}
+
+// ---- frame-time instrumentation: measure the game's real per-frame cadence at nextDrawable
+// (called once per frame regardless of how it presents, so it works in every mode). Logs avg +
+// worst-case present interval every 120 frames so we get milliseconds instead of "feels stuttery". ----
+static double g_lastFrameT = 0.0, g_ftSum = 0.0, g_ftMax = 0.0; static int g_ftCount = 0;
+static void frameTick() {
+    double now = CACurrentMediaTime();
+    if (g_lastFrameT > 0.0) {
+        double dt = (now - g_lastFrameT) * 1000.0;   // ms
+        g_ftSum += dt; if (dt > g_ftMax) g_ftMax = dt; g_ftCount++;
+        if (g_ftCount >= 120) {
+            olog("frametime: avg=%.2fms max=%.2fms over %d frames (mode=%s console=%s)",
+                 g_ftSum / g_ftCount, g_ftMax, g_ftCount, modeName(), g_show.load() ? "open" : "closed");
+            g_ftSum = 0.0; g_ftMax = 0.0; g_ftCount = 0;
+        }
+    }
+    g_lastFrameT = now;
+}
+
 // ---- input event queue (main thread -> render thread) ----
 struct InEvent { int type; int code; bool down; unsigned ch; float x; float y; };
 static std::deque<InEvent> g_queue;
 static std::mutex g_qmtx;
+
+// ---- virtual mouse cursor (delta-accumulated; render-thread owned) ----
+// The game associates the OS cursor off and hides it during gameplay, so absolute window coords are
+// frozen. We accumulate raw mouse deltas into our own cursor position (framebuffer px) and let ImGui
+// draw a software cursor, so the mouse works regardless of the game's pointer-capture state.
+static float g_mx = 0.0f, g_my = 0.0f;
+static bool  g_mouseInit = false;
+static std::atomic<bool> g_recenterMouse{false};   // center the cursor when the console opens
 
 // ---- command channel ----
 static void refreshOut() {
@@ -85,7 +134,7 @@ static void handleSubmit(const char* cmd) {
     if (strcmp(cmd, "help") == 0) {
         appendOut("items:  give <Items.X> <qty> | removeitem <Items.X> <qty> | money <n>");
         appendOut("        CET style: Game.AddToInventory(\"Items.X\", n)");
-        appendOut("char:   perks <n> | attrs <n> | relic <n> | level <n> | heal | godmode [off] | invis [off] | infammo [off]");
+        appendOut("char:   perks <n> | attrs <n> | relic <n> | level <n> | streetcred <n> | heal | godmode [off] | invis [off] | infammo [off]");
         appendOut("world:  time <h> [m] | slowmo [factor|off] | nopolice [off]");
         appendOut("        teleport save <name> | teleport <name> | teleport <x> <y> <z> | setfact <name> <n>");
         appendOut("misc:   call <Class> <method> [args] | sig <Class> <method> | convdump | clear | help");
@@ -118,16 +167,6 @@ static ImGuiKey macKeyToImGui(unsigned short k) {
     }
 }
 
-static void pushMousePos(NSEvent* ev) {
-    NSWindow* w = ev.window; if (!w) return;
-    NSView* cv = [w contentView]; if (!cv) return;
-    NSPoint p = ev.locationInWindow;
-    NSPoint vp = [cv convertPoint:p fromView:nil];
-    CGFloat h = cv.bounds.size.height;
-    CGFloat sc = w.backingScaleFactor;
-    g_queue.push_back({2, 0, false, 0, (float)(vp.x * sc), (float)((h - vp.y) * sc)});
-}
-
 // Called on the MAIN thread from the sendEvent swizzle. Only queues data; no ImGui calls.
 static void pushEventFromNS(NSEvent* ev) {
     NSEventType t = ev.type;
@@ -147,13 +186,17 @@ static void pushEventFromNS(NSEvent* ev) {
     } else if (t == NSEventTypeLeftMouseDown || t == NSEventTypeLeftMouseUp || t == NSEventTypeRightMouseDown ||
                t == NSEventTypeRightMouseUp || t == NSEventTypeMouseMoved || t == NSEventTypeLeftMouseDragged ||
                t == NSEventTypeRightMouseDragged) {
-        pushMousePos(ev);
+        // Movement: queue raw deltas (type 6). deltaX/deltaY keep reporting even when the game has the
+        // cursor associated-off, unlike absolute locationInWindow. Scaled to framebuffer px by the
+        // window's backing scale; the render thread integrates + clamps these into an absolute pos.
+        CGFloat sc = ev.window ? ev.window.backingScaleFactor : 1.0;
+        if (ev.deltaX != 0.0 || ev.deltaY != 0.0)
+            g_queue.push_back({6, 0, false, 0, (float)(ev.deltaX * sc), (float)(ev.deltaY * sc)});
         if (t == NSEventTypeLeftMouseDown)       g_queue.push_back({3, 0, true,  0, 0, 0});
         else if (t == NSEventTypeLeftMouseUp)    g_queue.push_back({3, 0, false, 0, 0, 0});
         else if (t == NSEventTypeRightMouseDown) g_queue.push_back({3, 1, true,  0, 0, 0});
         else if (t == NSEventTypeRightMouseUp)   g_queue.push_back({3, 1, false, 0, 0, 0});
     } else if (t == NSEventTypeScrollWheel) {
-        pushMousePos(ev);
         g_queue.push_back({4, 0, false, 0, (float)ev.scrollingDeltaX * 0.1f, (float)ev.scrollingDeltaY * 0.1f});
     }
 }
@@ -161,6 +204,12 @@ static void pushEventFromNS(NSEvent* ev) {
 static void drainEvents() {
     std::lock_guard<std::mutex> lk(g_qmtx);
     ImGuiIO& io = ImGui::GetIO();
+    // Center the virtual cursor on first use and each time the console opens, so it's findable.
+    // DisplaySize is valid here (renderOverlay sets it just before calling drainEvents).
+    if (!g_mouseInit || g_recenterMouse.exchange(false)) {
+        g_mx = io.DisplaySize.x * 0.5f; g_my = io.DisplaySize.y * 0.5f; g_mouseInit = true;
+        io.AddMousePosEvent(g_mx, g_my);
+    }
     for (auto& e : g_queue) {
         switch (e.type) {
             case 0: io.AddKeyEvent((ImGuiKey)e.code, e.down); break;
@@ -170,6 +219,10 @@ static void drainEvents() {
             case 4: io.AddMouseWheelEvent(e.x, e.y); break;
             case 5: io.AddKeyEvent(ImGuiMod_Ctrl, e.code & 1); io.AddKeyEvent(ImGuiMod_Shift, e.code & 2);
                     io.AddKeyEvent(ImGuiMod_Alt, e.code & 4); io.AddKeyEvent(ImGuiMod_Super, e.code & 8); break;
+            case 6: g_mx += e.x; g_my += e.y;   // integrate raw mouse delta -> absolute pos, clamp to screen
+                    if (g_mx < 0) g_mx = 0; else if (g_mx > io.DisplaySize.x) g_mx = io.DisplaySize.x;
+                    if (g_my < 0) g_my = 0; else if (g_my > io.DisplaySize.y) g_my = io.DisplaySize.y;
+                    io.AddMousePosEvent(g_mx, g_my); break;
         }
     }
     g_queue.clear();
@@ -196,6 +249,7 @@ static void initImGui(id<MTLDevice> dev) {
     io.IniFilename = NULL;
     io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
     io.ConfigMacOSXBehaviors = true;   // Cmd-based shortcuts (Cmd+V paste, Cmd+C copy, Cmd+A select-all)
+    io.MouseDrawCursor = true;         // draw our own cursor (the game hides the OS one during gameplay)
     ImGuiPlatformIO& pio = ImGui::GetPlatformIO();
     pio.Platform_GetClipboardTextFn = clip_get;
     pio.Platform_SetClipboardTextFn = clip_set;
@@ -420,7 +474,8 @@ static void drawQuickTab() {
     if (ImGui::Button("Perks +10")) runLabeled("perks 10", "Perks +10"); ImGui::SameLine();
     if (ImGui::Button("Attrs +10")) runLabeled("attrs 10", "Attrs +10"); ImGui::SameLine();
     if (ImGui::Button("Relic +10")) runLabeled("relic 10", "Relic +10"); ImGui::SameLine();
-    if (ImGui::Button("Level 50")) runLabeled("level 50", "Level 50");
+    if (ImGui::Button("Level 50")) runLabeled("level 50", "Level 50"); ImGui::SameLine();
+    if (ImGui::Button("Street Cred 50")) runLabeled("streetcred 50", "Street Cred 50");
     ImGui::Separator();
     ImGui::TextDisabled("World:");
     if (ImGui::Button("Day")) runLabeled("time 12", "Time: noon"); ImGui::SameLine();
@@ -532,19 +587,19 @@ static IMP origPresentFor(id self, SEL _cmd) {
 // and we hook both); render ONLY at the outermost call so we don't draw the overlay twice per frame.
 static thread_local int g_presentDepth = 0;
 static void my_presentDrawable(id self, SEL _cmd, id drawable) {
-    if (g_presentDepth == 0) runRender(self, drawable);
+    if (g_presentDepth == 0 && g_mode == NCC_FULL) runRender(self, drawable);
     g_presentDepth++;
     IMP o = origPresentFor(self, _cmd); if (o) ((void(*)(id, SEL, id))o)(self, _cmd, drawable);
     g_presentDepth--;
 }
 static void my_presentAtTime(id self, SEL _cmd, id drawable, CFTimeInterval t) {
-    if (g_presentDepth == 0) runRender(self, drawable);
+    if (g_presentDepth == 0 && g_mode == NCC_FULL) runRender(self, drawable);
     g_presentDepth++;
     IMP o = origPresentFor(self, _cmd); if (o) ((void(*)(id, SEL, id, CFTimeInterval))o)(self, _cmd, drawable, t);
     g_presentDepth--;
 }
 static void my_presentAfter(id self, SEL _cmd, id drawable, CFTimeInterval d) {
-    if (g_presentDepth == 0) runRender(self, drawable);
+    if (g_presentDepth == 0 && g_mode == NCC_FULL) runRender(self, drawable);
     g_presentDepth++;
     IMP o = origPresentFor(self, _cmd); if (o) ((void(*)(id, SEL, id, CFTimeInterval))o)(self, _cmd, drawable, d);
     g_presentDepth--;
@@ -558,7 +613,7 @@ static void my_sendEvent(id self, SEL _cmd, NSEvent* ev) {
             if (kc == 50 || kc == 122) {  // ` (grave/tilde) or F1
                 bool now = !g_show.load();
                 g_show = now;
-                if (now) { g_focusInput = true; NSWindow* w = ev.window; if (w) [w setAcceptsMouseMovedEvents:YES]; }
+                if (now) { g_focusInput = true; g_recenterMouse = true; NSWindow* w = ev.window; if (w) [w setAcceptsMouseMovedEvents:YES]; }
                 return;  // swallow the toggle key
             }
             // Cmd+1 / Cmd+2 / Cmd+3 switch tabs (the game captures the mouse, so tabs are keyboard-driven)
@@ -591,6 +646,7 @@ static void my_sendEvent(id self, SEL _cmd, NSEvent* ev) {
 static IMP g_origNextDrawable = NULL;
 static id my_nextDrawable(id self, SEL _cmd) {
     id d = ((id(*)(id, SEL))g_origNextDrawable)(self, _cmd);
+    frameTick();   // once per frame, every mode: our frame-cadence probe
     static std::atomic<bool> logged{false};
     if (!logged.exchange(true))
         olog("nextDrawable FIRED: layer=%s drawable=%s", class_getName(object_getClass(self)),
@@ -608,6 +664,7 @@ static void installLayerDiag() {
 }
 
 static void installPresentHook() {
+    if (g_mode == NCC_OFF) { olog("NCC_MODE=off: present hook NOT installed (bisection)"); return; }
     // Force the GPU-family command-buffer class (AGXG16F etc.) to load so the scan below sees it.
     @try {
         id<MTLDevice> dev = MTLCreateSystemDefaultDevice();
@@ -656,7 +713,8 @@ static void installInputHook() {
 
 __attribute__((constructor))
 static void overlay_init() {
-    olog("==== CP2077 overlay dylib loaded ====");
+    readMode();
+    olog("==== CP2077 overlay dylib loaded (NCC_MODE=%s) ====", modeName());
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(3 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
         installPresentHook();
         installInputHook();

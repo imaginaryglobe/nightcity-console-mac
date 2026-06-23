@@ -2,7 +2,7 @@ import SwiftUI
 import AppKit
 
 enum Const {
-    static let appVersion = "1.3.1"
+    static let appVersion = "1.3.2"
     static let supportedGameVersion = "2.3.1"
     static let defaultGame = "\(NSHomeDirectory())/Library/Application Support/Steam/steamapps/common/Cyberpunk 2077"
     // Files copied from the app's Resources into <game>/red4ext/ on install.
@@ -20,6 +20,8 @@ final class Model: ObservableObject {
     @Published var gameVersion: String? = nil
     @Published var updateText: String? = nil      // set when a newer release is found on GitHub
     @Published var updateURL: String? = nil
+    @Published var updateTag: String? = nil        // the new release tag (for the "What's new in ..." title)
+    @Published var updateBody: String? = nil       // the release notes / changelog (GitHub release body)
     @Published var needsDiskAccess: Bool = false  // set when an op fails because the game is on a drive we can't access
 
     private let defaults = UserDefaults.standard
@@ -88,9 +90,13 @@ final class Model: ObservableObject {
                     if let u = a["browser_download_url"] as? String { dl = u; break }
                 }
             }
+            // Release notes (markdown) ride along in the same response - no extra request.
+            let body = (obj["body"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
             DispatchQueue.main.async {
                 self.updateText = "Update available: \(tag). Download the new version and replace the app."
                 self.updateURL = dl
+                self.updateTag = tag
+                self.updateBody = (body?.isEmpty == false) ? body : nil
             }
         }.resume()
     }
@@ -280,10 +286,28 @@ struct ContentView: View {
             Divider()
 
             if let ut = m.updateText {
-                HStack {
-                    Label(ut, systemImage: "arrow.down.circle.fill").font(.callout).foregroundColor(.green)
-                    Spacer()
-                    if let u = m.updateURL, let url = URL(string: u) { Link("Download", destination: url) }
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack {
+                        Label(ut, systemImage: "arrow.down.circle.fill").font(.callout).foregroundColor(.green)
+                        Spacer()
+                        if let u = m.updateURL, let url = URL(string: u) { Link("Download", destination: url) }
+                    }
+                    // Changelog: collapsed by default. Costs nothing (the body came with the update check),
+                    // and answers "do I care about this update?" without cluttering the window when ignored.
+                    if let body = m.updateBody {
+                        // No isExpanded binding on purpose: DisclosureGroup self-manages its toggle and
+                        // starts collapsed. (Avoids @State, which is a macro unavailable under CLT-only.)
+                        DisclosureGroup("What's new" + (m.updateTag.map { " in \($0)" } ?? "")) {
+                            ScrollView {
+                                Text(body)
+                                    .font(.system(.caption, design: .monospaced))
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .textSelection(.enabled)
+                            }
+                            .frame(maxHeight: 120)
+                        }
+                        .font(.caption)
+                    }
                 }
             }
 
