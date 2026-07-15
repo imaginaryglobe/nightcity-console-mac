@@ -8,7 +8,7 @@
 set -e
 cd "$(dirname "$0")/.."
 mkdir -p deps
-GAME="$HOME/Library/Application Support/Steam/steamapps/common/Cyberpunk 2077/red4ext"
+GAME="${CP2077_DIR:-$HOME/Library/Application Support/Steam/steamapps/common/Cyberpunk 2077}/red4ext"
 
 copy_if() { [ -f "$1" ] && cp "$1" "deps/$(basename "$1")" && echo "  got $(basename "$1")"; }
 
