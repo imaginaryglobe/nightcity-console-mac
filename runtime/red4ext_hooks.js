@@ -1009,8 +1009,14 @@ rpc.exports = {
         // default knife: index 9 (BlackWall_Knife) in the original is a placeholder the author never
         // filled in ("Custom Knife, Replace this with your own item ID") and likely isn't a real item
         // in the base game's TweakDB. Default to index 0 (a real legendary iconic knife) instead.
-        // enabled defaults true so the effect just works with no command needed.
-        const bwkState = { enabled:true, knifeIdx:0, cooldownSec:0.5, lastProc:0, useFx:true, useAnim:true };
+        // SAFETY: enabled defaults false for now (was true). Live recon (bwkhit) showed NPCPuppet.OnHit
+        // firing ~20x almost instantly from a couple of melee/throw attempts, and the observed param
+        // type hashes don't match the documented gameHitEvent - this is very likely NOT the plain
+        // combat-damage event, but something higher-frequency. Running speculative native calls
+        // (equip-check, status-effect lookup) on every firing of a high-frequency event is a plausible
+        // cause of the reported freeze, so auto-arming stays off until this is nailed down. Turn on
+        // manually with "bwk on" if you want to test anyway.
+        const bwkState = { enabled:false, knifeIdx:0, cooldownSec:0.5, lastProc:0, useFx:true, useAnim:true };
         let bwkProcObs=null;
         // GetItemInSlot(owner, TweakDBID slot) -> gameItemID (16B, TweakDBID assumed to lead the struct
         // per ItemID::FromTDBID). Name/signature taken from the original mod's own
@@ -1250,7 +1256,7 @@ rpc.exports = {
         // defaults true). The observer itself no-ops until getGI()/authPlayer() succeed, so this is safe
         // to register before a player exists.
         bwkProcObs=cmObserve('NPCPuppet','OnHit', bwkOnHit);
-        log('BlackWallKnife: auto-armed (knife='+BWK_KNIVES[bwkState.knifeIdx].name+', cooldown='+bwkState.cooldownSec+'s) - "bwk off" to disable, "bwk" for usage');
+        log('BlackWallKnife: loaded but DISABLED by default pending OnHit investigation - "bwk on" to test anyway, "bwk" for usage');
         log('==== MINI-CET v3 (universal call + perks/attrs/relic) ready ====');
         Interceptor.attach(execAddr,{
             onEnter:function(args){ depth++; if(busy) return;
