@@ -1,0 +1,22 @@
+{
+  "id": "blackwallknife",
+  "title": "BlackWallKnife",
+  "widgets": [
+    { "type": "text", "label": "Native port of the BlackWallKnife mod: while the configured knife is your equipped weapon, any NPC that takes damage gets hit with a Blackwall hack effect (on a cooldown). Auto-enabled on load." },
+    { "type": "separator" },
+    { "type": "checkbox", "label": "Enabled", "field": "bwk_on", "default": 1, "cmdOn": "bwk on", "cmdOff": "bwk off", "toast": "BlackWallKnife" },
+    { "type": "separator" },
+    { "type": "text", "label": "Knife 1=Punk_Knife 2=Fang 3=Neurotoxin_Knife 4=Stinger_Knife 5=Tanto_Saburo 6=Tanto_Saburo_Retrofix 7=Neurotoxin_Knife_Military 8=Chefs_Knife 9=Tac_Knife 10=BlackWall_Knife(placeholder, may not exist)" },
+    { "type": "slider_int", "label": "Knife", "field": "knife", "min": 1, "max": 10, "default": 1 },
+    { "type": "button", "label": "Set Knife", "cmd": "bwk knife {knife}", "toast": "Knife set" },
+    { "type": "separator" },
+    { "type": "input_text", "label": "Cooldown (seconds)", "field": "cooldown", "default": "0.5" },
+    { "type": "button", "label": "Set Cooldown", "cmd": "bwk cooldown {cooldown}", "toast": "Cooldown set" },
+    { "type": "separator" },
+    { "type": "checkbox", "label": "Screen/Sound Effect", "field": "bwk_fx", "default": 1, "cmdOn": "bwk fx on", "cmdOff": "bwk fx off", "toast": "BlackWallKnife FX" },
+    { "type": "same_line" },
+    { "type": "checkbox", "label": "Animation", "field": "bwk_anim", "default": 1, "cmdOn": "bwk anim on", "cmdOff": "bwk anim off", "toast": "BlackWallKnife Anim" },
+    { "type": "separator" },
+    { "type": "text", "label": "Note: sliders/toggles here reset to these defaults on every relaunch (no persistence yet). Re-apply after restarting if you changed them." }
+  ]
+}
