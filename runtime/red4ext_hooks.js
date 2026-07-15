@@ -617,6 +617,11 @@ rpc.exports = {
             return ob;
         }
         function cmUnobserve(){ obsByMethod={}; obsCount=0; log('observe: all cleared'); }
+        // Targeted removal: splice ONE observer out without nuking the rest (cmUnobserve wipes the
+        // whole map, which killed unrelated hooks when a diagnostic was cleared - see bwkhit).
+        function cmUnobserveOne(ob){ if(!ob) return; const mh='0x'+fnv(ob.methodName).toString(16); const l=obsByMethod[mh]; if(!l) return;
+            const i=l.indexOf(ob); if(i>=0){ l.splice(i,1); obsCount--; if(!l.length) delete obsByMethod[mh]; log('observe - '+ob.className+'.'+ob.methodName); } }
+        function obsPresent(ob){ if(!ob) return false; const l=obsByMethod['0x'+fnv(ob.methodName).toString(16)]; return !!(l&&l.indexOf(ob)>=0); }
         // ===== script-object creation + field access (for building the native menu) =====
         // NO sig-scanned addresses (the JSON's CClass_CreateInstance hash is bogus on this binary - it points
         // at a parser). Instead use the CClass vtable, which we already call successfully (nameOf uses vt+0x10).
@@ -972,7 +977,7 @@ rpc.exports = {
         // bytes from a real hit can be compared against candidate offsets by hand.
         let bwkHitObs=null, bwkHitCount=0;
         function bwkHitProbe(on){
-            if(on===false){ if(bwkHitObs){ cmUnobserve(); bwkHitObs=null; } log('bwkhit: cleared'); return; }
+            if(on===false){ if(bwkHitObs){ cmUnobserveOne(bwkHitObs); bwkHitObs=null; } log('bwkhit: cleared (only its own observer - others untouched)'); return; }
             bwkHitCount=0;
             bwkHitObs=cmObserve('NPCPuppet','OnHit', function(ctx, frame, fn){
                 if(bwkHitCount>=20) return; bwkHitCount++;
@@ -1016,24 +1021,35 @@ rpc.exports = {
         // (equip-check, status-effect lookup) on every firing of a high-frequency event is a plausible
         // cause of the reported freeze, so auto-arming stays off until this is nailed down. Turn on
         // manually with "bwk on" if you want to test anyway.
-        const bwkState = { enabled:false, knifeIdx:0, cooldownSec:0.5, lastProc:0, useFx:true, useAnim:true };
-        let bwkProcObs=null;
-        // GetItemInSlot(owner, TweakDBID slot) -> gameItemID (16B, TweakDBID assumed to lead the struct
-        // per ItemID::FromTDBID). Name/signature taken from the original mod's own
-        // Game.GetTransactionSystem():GetItemInSlot(player, TweakDBID.new(...)) call.
+        const bwkState = { enabled:false, knifeIdx:0, cooldownSec:0.5, lastProc:0, useFx:true, useAnim:true, ts:null, ses:null };
+        let bwkProcObs=null, bwkQueued=false;
+        // GetItemInSlot(owner, slot) returns the equipped ItemObject (a HANDLE to the weapon object),
+        // NOT an item id - the id needs a second call, GetItemID(), on that object. This mirrors the
+        // original mod exactly: weapon = GetItemInSlot(...); weaponItemID = weapon:GetItemID().
+        // Returns the 16B gameItemID buffer (TweakDBID in the first 8 bytes, per ItemID::FromTDBID).
         function getEquippedItemID(slotTDB){
             const gi=getGI(); if(!gi) return null;
             const p=authPlayer(gi); if(!p) return null;
-            const ts=getSystemFlexible(gi,'gameTransactionSystem','GetTransactionSystem'); if(!ts) return null;
+            if(!bwkState.ts||!sane(bwkState.ts)) bwkState.ts=getSystemFlexible(gi,'gameTransactionSystem','GetTransactionSystem');
+            const ts=bwkState.ts; if(!ts) return null;
             const e=resolveAny(['gameTransactionSystem'],'GetItemInSlot'); if(!e){ log('bwk: GetItemInSlot not found'); return null; }
-            try{ return callFunc(e.fn, ts, e.retType, ['@'+p.toString(), slotTDB]); }
+            let obj;
+            try{ const r=callFunc(e.fn, ts, e.retType, ['@'+p.toString(), slotTDB]); obj=r.readPointer(); }
             catch(ex){ log('bwk: GetItemInSlot err '+ex); return null; }
+            if(!sane(obj)){ log('bwk: no weapon object in slot'); return null; }
+            const g=resolveAny(['ItemObject','gameItemObject','gameweaponObject','gameObject'],'GetItemID');
+            if(!g){ log('bwk: GetItemID not found'); return null; }
+            try{ return callFunc(g.fn, obj, g.retType, []); }
+            catch(ex){ log('bwk: GetItemID err '+ex); return null; }
         }
         function isKnifeEquipped(knifeId){
             const r=getEquippedItemID('AttachmentSlots.WeaponRight'); if(!r) return false;
             const want=tdbidBytes(knifeId);
-            try{ for(let i=0;i<8;i++){ if(r.add(i).readU8()!==want[i]) return false; } return true; }
-            catch(e){ return false; }
+            try{
+                let match=true; for(let i=0;i<8;i++){ if(r.add(i).readU8()!==want[i]){ match=false; break; } }
+                if(!match) log('bwk: equipped id ['+hexp(r,8)+'] != wanted ['+want.map(function(b){return ('0'+b.toString(16)).slice(-2);}).join(' ')+'] ('+knifeId+') - no proc');
+                return match;
+            }catch(e){ return false; }
         }
         // Apply/remove a status effect on an ARBITRARY target (statusApply, ~line 785, is hardwired to
         // the player) - same call shape, GetEntityID taken off the passed-in target instead.
@@ -1041,15 +1057,16 @@ rpc.exports = {
             const gi=getGI(); if(!gi) return false;
             const geid=resolveAny(['gameObject','gameEntity'],'GetEntityID'); if(!geid) return false;
             let eid; try{ eid=callFunc(geid.fn, target, geid.retType, []); }catch(ex){ log('bwk: target GetEntityID err '+ex); return false; }
-            const ses=getSystemFlexible(gi,'gameStatusEffectSystem','GetStatusEffectSystem'); if(!ses) return false;
+            if(!bwkState.ses||!sane(bwkState.ses)) bwkState.ses=getSystemFlexible(gi,'gameStatusEffectSystem','GetStatusEffectSystem');
+            const ses=bwkState.ses; if(!ses) return false;
             const e=resolveAny(['gameStatusEffectSystem'], on===false?'RemoveStatusEffect':'ApplyStatusEffect'); if(!e) return false;
             try{ callFunc(e.fn, ses, e.retType, [{raw:eid,n:8}, effectID]); return true; }
             catch(ex){ log('bwk: status apply err '+ex); return false; }
         }
-        // The trigger: NPCPuppet.OnHit fires whenever ANY NPC takes damage, from anything. There is no
-        // confirmed way (yet) to decode who dealt the hit out of the incoming frame (see bwkhit above),
-        // so per the agreed fallback this deliberately does NOT check "was it the player who hit them" -
-        // it procs whenever an NPC is damaged while the configured knife is the player's equipped weapon.
+        // Trigger note: NPCPuppet.OnHit fires whenever ANY NPC takes damage, from anything, and there is
+        // no confirmed way (yet) to decode who dealt the hit from the incoming frame (see bwkhit above).
+        // Per the agreed fallback, the proc deliberately does NOT check "was it the player who hit them" -
+        // it fires whenever an NPC is damaged while the configured knife is the player's equipped weapon.
         // Screen/sound flourish - same call shape as other working callFunc calls, name/args taken
         // from the original mod's GameObjectEffectHelper.StartEffectEvent(player, "blackwall_use_force").
         function bwkScreenFx(p){
@@ -1071,22 +1088,37 @@ rpc.exports = {
                 callFunc(qe.fn, p, qe.retType, ['@'+inst.toString()]);
             }catch(ex){ log('bwk: anim fx err '+ex); }
         }
+        // OBSERVER CALLBACK - runs INSIDE the exec interceptor's onEnter, where calling back into the
+        // engine VM is unsafe (this caused the reported in-game freeze: the old version did the full
+        // equip-check + status-apply chain here, on every firing of a burst-firing event). Now it does
+        // only cheap JS - gate checks + queue an internal command - and the heavy work happens in
+        // execute() at the same depth===0/busy-guarded drain point every user command runs at.
         function bwkOnHit(ctx, frame, fn){
-            if(!bwkState.enabled) return;
+            if(!bwkState.enabled || bwkQueued || !player) return;   // !player: never queue what execute()'s in-game guard would drop (bwkQueued would strand true)
             const now=Date.now();
             if(now - bwkState.lastProc < bwkState.cooldownSec*1000) return;
+            bwkState.lastProc=now;      // gate at queue time so a burst can't stack multiple procs
+            bwkQueued=true;
+            pendingQ.push('bwkproc '+ctx);
+        }
+        // The real proc, dispatched from execute() ('bwkproc <ptr>') at the safe drain point.
+        function bwkDoProc(pstr){
+            bwkQueued=false;
+            const target=ptr(pstr); if(!sane(target)){ log('bwk: stale/insane target '+pstr+' - skipped'); return; }
             const knife=BWK_KNIVES[bwkState.knifeIdx];
-            if(!isKnifeEquipped(knife.id)) return;
-            bwkState.lastProc=now;
-            const ok=statusApplyTo(ctx, BWK_EFFECT_ID, true);
-            log('*** BlackWallKnife ('+knife.name+') '+(ok?'proc':'proc FAILED')+' on '+ctx+' ***');
+            if(!isKnifeEquipped(knife.id)) return;   // logs its own equipped-vs-wanted diagnostic on mismatch
+            const ok=statusApplyTo(target, BWK_EFFECT_ID, true);
+            log('*** bwk proc ('+knife.name+') '+(ok?'applied':'FAILED')+' on '+target+' ***');
             if(ok){ const gi=getGI(); const p=gi?authPlayer(gi):null; if(p){ if(bwkState.useFx) bwkScreenFx(p); if(bwkState.useAnim) bwkAnimFx(p); } }
         }
         function bwkSetEnabled(on){
             bwkState.enabled=!!on;
-            if(bwkState.enabled && !bwkProcObs){ bwkProcObs=cmObserve('NPCPuppet','OnHit', bwkOnHit); }
+            bwkQueued=false;   // clear any stranded queue flag so toggling always recovers
+            // re-register if the observer isn't actually in the map (a stale bwkProcObs survives
+            // cmUnobserve()/'observe off', which previously made "bwk on" a silent no-op)
+            if(bwkState.enabled && !obsPresent(bwkProcObs)){ bwkProcObs=cmObserve('NPCPuppet','OnHit', bwkOnHit); }
             const knife=BWK_KNIVES[bwkState.knifeIdx];
-            log('*** BlackWallKnife '+(bwkState.enabled?'ON':'OFF')+' (knife='+knife.name+', cooldown='+bwkState.cooldownSec+'s)'
+            log('*** bwk '+(bwkState.enabled?'ON':'OFF')+' (knife='+knife.name+', cooldown='+bwkState.cooldownSec+'s)'
                 +(bwkState.enabled?' - NOTE: procs on ANY NPC damage while you hold the knife, not just your own hits (no instigator check yet)':'')+' ***');
         }
         function addPoints(n, member){
@@ -1213,11 +1245,12 @@ rpc.exports = {
             if(t[0]==='convdump'){ convdump(); return; }
             if(t[0]==='bwkprobe'){ bwkProbe(); return; }
             if(t[0]==='bwkhit'){ bwkHitProbe(t[1]!=='off'); return; }
+            if(t[0]==='bwkproc'&&t[1]){ bwkDoProc(t[1]); return; }   // internal: queued by the OnHit observer
             if(t[0]==='bwk'){
                 if(t[1]==='on'){ bwkSetEnabled(true); return; }
                 if(t[1]==='off'){ bwkSetEnabled(false); return; }
                 if(t[1]==='knife'&&t[2]){ const idx=Math.max(1,Math.min(10,parseInt(t[2])||1))-1; bwkState.knifeIdx=idx; log('bwk knife -> #'+(idx+1)+' '+BWK_KNIVES[idx].name+' ('+BWK_KNIVES[idx].id+')'); return; }
-                if(t[1]==='cooldown'&&t[2]){ bwkState.cooldownSec=Math.max(0,parseFloat(t[2])||0.5); log('bwk cooldown -> '+bwkState.cooldownSec+'s'); return; }
+                if(t[1]==='cooldown'&&t[2]!==undefined){ const v=parseFloat(t[2]); bwkState.cooldownSec=isNaN(v)?0.5:Math.max(0,v); log('bwk cooldown -> '+bwkState.cooldownSec+'s'); return; }   // isNaN check: 0 is a valid value ('0'||0.5 was silently 0.5)
                 if(t[1]==='fx'){ bwkState.useFx=(t[2]!=='off'); log('bwk fx -> '+(bwkState.useFx?'on':'off')); return; }
                 if(t[1]==='anim'){ bwkState.useAnim=(t[2]!=='off'); log('bwk anim -> '+(bwkState.useAnim?'on':'off')); return; }
                 log('usage: bwk on|off | bwk knife <1-10> | bwk cooldown <seconds> | bwk fx on|off | bwk anim on|off'); return; }
@@ -1252,11 +1285,11 @@ rpc.exports = {
                 Interceptor.attach(base.add(0x31e18), { onLeave:function(){ try{ clearFile(CMD); }catch(e){} _x2(0); } });
                 log('shutdown-exit hook installed (Main+0x31e18)'); }
             else log('shutdown-exit: _exit unresolved'); }catch(e){ log('shutdown-exit err: '+e); }
-        // BlackWallKnife: arm automatically on load so it works with no command needed (bwkState.enabled
-        // defaults true). The observer itself no-ops until getGI()/authPlayer() succeed, so this is safe
-        // to register before a player exists.
+        // BlackWallKnife: observer registered at startup but gated on bwkState.enabled (defaults FALSE
+        // until a working proc is confirmed live). The callback is cheap JS only (queue handoff), so
+        // registering before a player exists is safe.
         bwkProcObs=cmObserve('NPCPuppet','OnHit', bwkOnHit);
-        log('BlackWallKnife: loaded but DISABLED by default pending OnHit investigation - "bwk on" to test anyway, "bwk" for usage');
+        log('bwk: loaded, DISABLED by default - "bwk on" to enable, "bwk" for usage');
         log('==== MINI-CET v3 (universal call + perks/attrs/relic) ready ====');
         Interceptor.attach(execAddr,{
             onEnter:function(args){ depth++; if(busy) return;
