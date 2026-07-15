@@ -17,7 +17,9 @@
     { "type": "separator" },
     { "type": "checkbox", "label": "Screen/Sound Effect (no-op on this build)", "field": "bwk_fx", "default": 0, "cmdOn": "bwk fx on", "cmdOff": "bwk fx off", "toast": "BlackWallKnife FX" },
     { "type": "same_line" },
-    { "type": "checkbox", "label": "Animation (EXPERIMENTAL - can crash)", "field": "bwk_anim", "default": 0, "cmdOn": "bwk anim on", "cmdOff": "bwk anim off", "toast": "BlackWallKnife Anim" },
+    { "type": "checkbox", "label": "Animation (test first ->)", "field": "bwk_anim", "default": 0, "cmdOn": "bwk anim on", "cmdOff": "bwk anim off", "toast": "BlackWallKnife Anim" },
+    { "type": "same_line" },
+    { "type": "button", "label": "Test Animation Once", "cmd": "bwk anim test", "toast": "Anim test queued" },
     { "type": "separator" },
     { "type": "text", "label": "Note: sliders/toggles here reset to these defaults on every relaunch (no persistence yet). Re-apply after restarting if you changed them." }
   ]

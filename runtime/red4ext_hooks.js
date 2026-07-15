@@ -1089,16 +1089,26 @@ rpc.exports = {
             }catch(ex){ log('bwk: screen fx err '+ex); }
         }
         // One-handed animation flourish - createInstance/findProp are already proven primitives
-        // (used by the mkobj/field/props recon commands); QueueEvent's exact owning class is a guess
-        // (tried in order) since it was never confirmed live.
+        // (used by the mkobj/field/props recon commands). This is the same AdHocAnimationEvent +
+        // player:QueueEvent(...) the original CET mod uses. HARDENED after a live segfault: the old
+        // version called whatever 'QueueEvent' resolved first WITHOUT checking its parameter list -
+        // if that overload took more than one arg, the extra param slots went in as garbage pointers
+        // (a delayed crash when the engine dispatched the event later). Now the signature is logged
+        // and the call is refused unless it takes exactly one handle-typed parameter.
+        let bwkAnimSigLogged=false;
         function bwkAnimFx(p){
             try{
+                const qe=resolveAny(['entEntity','Entity','gameObject','GameObject'],'QueueEvent'); if(!qe){ log('bwk: QueueEvent not found'); return; }
+                const pc=qe.fn.add(0x30).readU32(); let ptn='?';
+                try{ ptn=nameOf(qe.fn.add(0x28).readPointer().readPointer().readPointer()); }catch(e){}
+                if(!bwkAnimSigLogged){ bwkAnimSigLogged=true; log('bwk: QueueEvent resolved - params['+pc+'] p0type='+ptn); }
+                if(pc!==1){ log('bwk: QueueEvent takes '+pc+' params (expected 1) - anim skipped as unsafe'); return; }
                 const inst=createInstance('AdHocAnimationEvent'); if(!inst){ log('bwk: AdHocAnimationEvent alloc failed'); return; }
                 const setU32=function(field,val){ const f=findProp('AdHocAnimationEvent',field); if(f) inst.add(f.off).writeU32(val); else log('bwk: field '+field+' not found'); };
                 const setBool=function(field,val){ const f=findProp('AdHocAnimationEvent',field); if(f) inst.add(f.off).writeU8(val?1:0); else log('bwk: field '+field+' not found'); };
                 setU32('animationIndex', 0); setBool('useBothHands', false); setBool('unequipWeapon', false);
-                const qe=resolveAny(['Entity','gameObject','GameObject'],'QueueEvent'); if(!qe){ log('bwk: QueueEvent not found'); return; }
                 callFunc(qe.fn, p, qe.retType, ['@'+inst.toString()]);
+                log('bwk: anim event queued');
             }catch(ex){ log('bwk: anim fx err '+ex); }
         }
         // OBSERVER CALLBACK - runs INSIDE the exec interceptor's onEnter, where calling back into the
@@ -1268,8 +1278,9 @@ rpc.exports = {
                 if(t[1]==='knife'&&t[2]){ const idx=Math.max(1,Math.min(10,parseInt(t[2])||1))-1; bwkState.knifeIdx=idx; bwkState.customWant=null; bwkState.customLabel=null; log('bwk knife -> #'+(idx+1)+' '+BWK_KNIVES[idx].name+' ('+BWK_KNIVES[idx].id+')'); return; }
                 if(t[1]==='cooldown'&&t[2]!==undefined){ const v=parseFloat(t[2]); bwkState.cooldownSec=isNaN(v)?0.5:Math.max(0,v); log('bwk cooldown -> '+bwkState.cooldownSec+'s'); return; }   // isNaN check: 0 is a valid value ('0'||0.5 was silently 0.5)
                 if(t[1]==='fx'){ bwkState.useFx=(t[2]!=='off'); log('bwk fx -> '+(bwkState.useFx?'on (note: StartEffectEvent unresolved on this build - may do nothing)':'off')); return; }
-                if(t[1]==='anim'){ bwkState.useAnim=(t[2]!=='off'); log('bwk anim -> '+(bwkState.useAnim?'on (WARNING: EXPERIMENTAL - suspected cause of a game segfault; keep off unless testing)':'off')); return; }
-                log('usage: bwk on|off | bwk knife <1-10> | bwk knife current | bwk cooldown <seconds> | bwk fx on|off | bwk anim on|off'); return; }
+                if(t[1]==='anim'&&t[2]==='test'){ log('bwk: anim test - queuing one AdHocAnimationEvent on the player now...'); bwkAnimFx(player); return; }   // isolated one-shot: proves the anim path safe (or not) without combat
+                if(t[1]==='anim'){ bwkState.useAnim=(t[2]!=='off'); log('bwk anim -> '+(bwkState.useAnim?'on (run "bwk anim test" a few times FIRST - if the game survives, this is safe)':'off')); return; }
+                log('usage: bwk on|off | bwk knife <1-10> | bwk knife current | bwk cooldown <seconds> | bwk fx on|off | bwk anim on|off|test'); return; }
             if(t[0]==='devdump'){ probeFuncs('PlayerDevelopmentSystem',['GetData','GetDevelopmentData','GetDevelopmentDataInternal','GetInstance']);
                 probeFuncs('PlayerDevelopmentData',['AddDevelopmentPoints']); return; }
             if(t[0]==='call'&&t[2]){ const cls=t[1],method=t[2],args=t.slice(3); const e=resolveFunc(cls,method); if(!e){ log('method '+cls+'.'+method+' not found'); return; }
