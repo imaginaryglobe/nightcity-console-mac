@@ -1021,7 +1021,7 @@ rpc.exports = {
         // (equip-check, status-effect lookup) on every firing of a high-frequency event is a plausible
         // cause of the reported freeze, so auto-arming stays off until this is nailed down. Turn on
         // manually with "bwk on" if you want to test anyway.
-        const bwkState = { enabled:false, knifeIdx:0, cooldownSec:0.5, lastProc:0, useFx:true, useAnim:true, ts:null, ses:null };
+        const bwkState = { enabled:false, knifeIdx:0, cooldownSec:0.5, lastProc:0, useFx:true, useAnim:true, ts:null, ses:null, customWant:null, customLabel:null };
         let bwkProcObs=null, bwkQueued=false;
         // GetItemInSlot(owner, slot) returns the equipped ItemObject (a HANDLE to the weapon object),
         // NOT an item id - the id needs a second call, GetItemID(), on that object. This mirrors the
@@ -1042,12 +1042,20 @@ rpc.exports = {
             try{ return callFunc(g.fn, obj, g.retType, []); }
             catch(ex){ log('bwk: GetItemID err '+ex); return null; }
         }
-        function isKnifeEquipped(knifeId){
+        // What ID must be equipped for a proc: either a knife from the mod's original list, or -
+        // via "bwk knife current" - the raw ID bytes of whatever was equipped when the user ran it
+        // (needed in practice: e.g. the game's common PUNKNIFE drop is Items.Preset_Punk_Knife_Pimp,
+        // not the Iconic_Legendary preset the original mod's list hardcodes).
+        function bwkWanted(){
+            if(bwkState.customWant) return {bytes:bwkState.customWant, label:bwkState.customLabel||'current weapon'};
+            const k=BWK_KNIVES[bwkState.knifeIdx]; return {bytes:tdbidBytes(k.id), label:k.name};
+        }
+        function isKnifeEquipped(){
             const r=getEquippedItemID('AttachmentSlots.WeaponRight'); if(!r) return false;
-            const want=tdbidBytes(knifeId);
+            const w=bwkWanted();
             try{
-                let match=true; for(let i=0;i<8;i++){ if(r.add(i).readU8()!==want[i]){ match=false; break; } }
-                if(!match) log('bwk: equipped id ['+hexp(r,8)+'] != wanted ['+want.map(function(b){return ('0'+b.toString(16)).slice(-2);}).join(' ')+'] ('+knifeId+') - no proc');
+                let match=true; for(let i=0;i<8;i++){ if(r.add(i).readU8()!==w.bytes[i]){ match=false; break; } }
+                if(!match) log('bwk: equipped id ['+hexp(r,8)+'] != wanted ['+w.bytes.map(function(b){return ('0'+b.toString(16)).slice(-2);}).join(' ')+'] ('+w.label+') - no proc');
                 return match;
             }catch(e){ return false; }
         }
@@ -1105,10 +1113,9 @@ rpc.exports = {
         function bwkDoProc(pstr){
             bwkQueued=false;
             const target=ptr(pstr); if(!sane(target)){ log('bwk: stale/insane target '+pstr+' - skipped'); return; }
-            const knife=BWK_KNIVES[bwkState.knifeIdx];
-            if(!isKnifeEquipped(knife.id)) return;   // logs its own equipped-vs-wanted diagnostic on mismatch
+            if(!isKnifeEquipped()) return;   // logs its own equipped-vs-wanted diagnostic on mismatch
             const ok=statusApplyTo(target, BWK_EFFECT_ID, true);
-            log('*** bwk proc ('+knife.name+') '+(ok?'applied':'FAILED')+' on '+target+' ***');
+            log('*** bwk proc ('+bwkWanted().label+') '+(ok?'applied':'FAILED')+' on '+target+' ***');
             if(ok){ const gi=getGI(); const p=gi?authPlayer(gi):null; if(p){ if(bwkState.useFx) bwkScreenFx(p); if(bwkState.useAnim) bwkAnimFx(p); } }
         }
         function bwkSetEnabled(on){
@@ -1117,8 +1124,7 @@ rpc.exports = {
             // re-register if the observer isn't actually in the map (a stale bwkProcObs survives
             // cmUnobserve()/'observe off', which previously made "bwk on" a silent no-op)
             if(bwkState.enabled && !obsPresent(bwkProcObs)){ bwkProcObs=cmObserve('NPCPuppet','OnHit', bwkOnHit); }
-            const knife=BWK_KNIVES[bwkState.knifeIdx];
-            log('*** bwk '+(bwkState.enabled?'ON':'OFF')+' (knife='+knife.name+', cooldown='+bwkState.cooldownSec+'s)'
+            log('*** bwk '+(bwkState.enabled?'ON':'OFF')+' (knife='+bwkWanted().label+', cooldown='+bwkState.cooldownSec+'s)'
                 +(bwkState.enabled?' - NOTE: procs on ANY NPC damage while you hold the knife, not just your own hits (no instigator check yet)':'')+' ***');
         }
         function addPoints(n, member){
@@ -1249,11 +1255,16 @@ rpc.exports = {
             if(t[0]==='bwk'){
                 if(t[1]==='on'){ bwkSetEnabled(true); return; }
                 if(t[1]==='off'){ bwkSetEnabled(false); return; }
-                if(t[1]==='knife'&&t[2]){ const idx=Math.max(1,Math.min(10,parseInt(t[2])||1))-1; bwkState.knifeIdx=idx; log('bwk knife -> #'+(idx+1)+' '+BWK_KNIVES[idx].name+' ('+BWK_KNIVES[idx].id+')'); return; }
+                if(t[1]==='knife'&&t[2]==='current'){ const r=getEquippedItemID('AttachmentSlots.WeaponRight');
+                    if(!r){ log('bwk knife current: could not read equipped weapon - equip a weapon in-game and retry'); return; }
+                    const b=[]; for(let i=0;i<8;i++) b.push(r.add(i).readU8());
+                    bwkState.customWant=b; bwkState.customLabel='current weapon ['+hexp(r,8)+']';
+                    log('bwk knife -> CURRENT equipped weapon ['+hexp(r,8)+'] - this weapon procs from now on ("bwk knife <1-10>" to go back to the list)'); return; }
+                if(t[1]==='knife'&&t[2]){ const idx=Math.max(1,Math.min(10,parseInt(t[2])||1))-1; bwkState.knifeIdx=idx; bwkState.customWant=null; bwkState.customLabel=null; log('bwk knife -> #'+(idx+1)+' '+BWK_KNIVES[idx].name+' ('+BWK_KNIVES[idx].id+')'); return; }
                 if(t[1]==='cooldown'&&t[2]!==undefined){ const v=parseFloat(t[2]); bwkState.cooldownSec=isNaN(v)?0.5:Math.max(0,v); log('bwk cooldown -> '+bwkState.cooldownSec+'s'); return; }   // isNaN check: 0 is a valid value ('0'||0.5 was silently 0.5)
                 if(t[1]==='fx'){ bwkState.useFx=(t[2]!=='off'); log('bwk fx -> '+(bwkState.useFx?'on':'off')); return; }
                 if(t[1]==='anim'){ bwkState.useAnim=(t[2]!=='off'); log('bwk anim -> '+(bwkState.useAnim?'on':'off')); return; }
-                log('usage: bwk on|off | bwk knife <1-10> | bwk cooldown <seconds> | bwk fx on|off | bwk anim on|off'); return; }
+                log('usage: bwk on|off | bwk knife <1-10> | bwk knife current | bwk cooldown <seconds> | bwk fx on|off | bwk anim on|off'); return; }
             if(t[0]==='devdump'){ probeFuncs('PlayerDevelopmentSystem',['GetData','GetDevelopmentData','GetDevelopmentDataInternal','GetInstance']);
                 probeFuncs('PlayerDevelopmentData',['AddDevelopmentPoints']); return; }
             if(t[0]==='call'&&t[2]){ const cls=t[1],method=t[2],args=t.slice(3); const e=resolveFunc(cls,method); if(!e){ log('method '+cls+'.'+method+' not found'); return; }
