@@ -15,9 +15,9 @@
     { "type": "input_text", "label": "Cooldown (seconds)", "field": "cooldown", "default": "0.5" },
     { "type": "button", "label": "Set Cooldown", "cmd": "bwk cooldown {cooldown}", "toast": "Cooldown set" },
     { "type": "separator" },
-    { "type": "checkbox", "label": "Screen/Sound Effect", "field": "bwk_fx", "default": 1, "cmdOn": "bwk fx on", "cmdOff": "bwk fx off", "toast": "BlackWallKnife FX" },
+    { "type": "checkbox", "label": "Screen/Sound Effect (no-op on this build)", "field": "bwk_fx", "default": 0, "cmdOn": "bwk fx on", "cmdOff": "bwk fx off", "toast": "BlackWallKnife FX" },
     { "type": "same_line" },
-    { "type": "checkbox", "label": "Animation", "field": "bwk_anim", "default": 1, "cmdOn": "bwk anim on", "cmdOff": "bwk anim off", "toast": "BlackWallKnife Anim" },
+    { "type": "checkbox", "label": "Animation (EXPERIMENTAL - can crash)", "field": "bwk_anim", "default": 0, "cmdOn": "bwk anim on", "cmdOff": "bwk anim off", "toast": "BlackWallKnife Anim" },
     { "type": "separator" },
     { "type": "text", "label": "Note: sliders/toggles here reset to these defaults on every relaunch (no persistence yet). Re-apply after restarting if you changed them." }
   ]

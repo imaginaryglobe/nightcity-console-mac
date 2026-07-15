@@ -1021,7 +1021,10 @@ rpc.exports = {
         // (equip-check, status-effect lookup) on every firing of a high-frequency event is a plausible
         // cause of the reported freeze, so auto-arming stays off until this is nailed down. Turn on
         // manually with "bwk on" if you want to test anyway.
-        const bwkState = { enabled:false, knifeIdx:0, cooldownSec:0.5, lastProc:0, useFx:true, useAnim:true, ts:null, ses:null, customWant:null, customLabel:null };
+        // useFx/useAnim default FALSE: StartEffectEvent doesn't resolve on this build (fx is a no-op),
+        // and the synthetic AdHocAnimationEvent queued by bwkAnimFx is the prime suspect in a live
+        // segfault (game crashed moments after the anim path ran on the first successful proc).
+        const bwkState = { enabled:false, knifeIdx:0, cooldownSec:0.5, lastProc:0, useFx:false, useAnim:false, ts:null, ses:null, customWant:null, customLabel:null };
         let bwkProcObs=null, bwkQueued=false;
         // GetItemInSlot(owner, slot) returns the equipped ItemObject (a HANDLE to the weapon object),
         // NOT an item id - the id needs a second call, GetItemID(), on that object. This mirrors the
@@ -1077,9 +1080,11 @@ rpc.exports = {
         // it fires whenever an NPC is damaged while the configured knife is the player's equipped weapon.
         // Screen/sound flourish - same call shape as other working callFunc calls, name/args taken
         // from the original mod's GameObjectEffectHelper.StartEffectEvent(player, "blackwall_use_force").
+        let bwkFxMissLogged=false;
         function bwkScreenFx(p){
             try{
-                const e=resolveAny(['GameObjectEffectHelper'],'StartEffectEvent'); if(!e){ log('bwk: StartEffectEvent not found'); return; }
+                const e=resolveAny(['GameObjectEffectHelper','gameObjectEffectHelper','GameObject','gameObject'],'StartEffectEvent');
+                if(!e){ if(!bwkFxMissLogged){ bwkFxMissLogged=true; log('bwk: StartEffectEvent not found on this build - fx disabled (logged once)'); } return; }
                 callFunc(e.fn, p, e.retType, ['@'+p.toString(), 'blackwall_use_force']);
             }catch(ex){ log('bwk: screen fx err '+ex); }
         }
@@ -1262,8 +1267,8 @@ rpc.exports = {
                     log('bwk knife -> CURRENT equipped weapon ['+hexp(r,8)+'] - this weapon procs from now on ("bwk knife <1-10>" to go back to the list)'); return; }
                 if(t[1]==='knife'&&t[2]){ const idx=Math.max(1,Math.min(10,parseInt(t[2])||1))-1; bwkState.knifeIdx=idx; bwkState.customWant=null; bwkState.customLabel=null; log('bwk knife -> #'+(idx+1)+' '+BWK_KNIVES[idx].name+' ('+BWK_KNIVES[idx].id+')'); return; }
                 if(t[1]==='cooldown'&&t[2]!==undefined){ const v=parseFloat(t[2]); bwkState.cooldownSec=isNaN(v)?0.5:Math.max(0,v); log('bwk cooldown -> '+bwkState.cooldownSec+'s'); return; }   // isNaN check: 0 is a valid value ('0'||0.5 was silently 0.5)
-                if(t[1]==='fx'){ bwkState.useFx=(t[2]!=='off'); log('bwk fx -> '+(bwkState.useFx?'on':'off')); return; }
-                if(t[1]==='anim'){ bwkState.useAnim=(t[2]!=='off'); log('bwk anim -> '+(bwkState.useAnim?'on':'off')); return; }
+                if(t[1]==='fx'){ bwkState.useFx=(t[2]!=='off'); log('bwk fx -> '+(bwkState.useFx?'on (note: StartEffectEvent unresolved on this build - may do nothing)':'off')); return; }
+                if(t[1]==='anim'){ bwkState.useAnim=(t[2]!=='off'); log('bwk anim -> '+(bwkState.useAnim?'on (WARNING: EXPERIMENTAL - suspected cause of a game segfault; keep off unless testing)':'off')); return; }
                 log('usage: bwk on|off | bwk knife <1-10> | bwk knife current | bwk cooldown <seconds> | bwk fx on|off | bwk anim on|off'); return; }
             if(t[0]==='devdump'){ probeFuncs('PlayerDevelopmentSystem',['GetData','GetDevelopmentData','GetDevelopmentDataInternal','GetInstance']);
                 probeFuncs('PlayerDevelopmentData',['AddDevelopmentPoints']); return; }
